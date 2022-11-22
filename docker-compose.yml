@@ -1,0 +1,73 @@
+services:
+  db:
+    image: postgres:14
+    volumes:
+      - ./data/db:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+
+  backend:
+    build:
+      context: ./backend
+
+    command: daphne -b 0.0.0.0 -p 8000 main.asgi:application
+
+    ports:
+      - 8000:8000
+    
+    volumes:
+      - media:/backend/media
+
+    depends_on:
+      - db
+      - redis
+  
+
+  frontend:
+    build:
+      context: ./frontend
+    
+    volumes:
+      - react_build:/frontend/build
+
+  nginx:
+    build:
+      context: ./nginx
+
+    ports:
+      - 80:80
+      - 1935:1935
+    
+    volumes:
+      - react_build:/var/www/react
+      - media:/var/www/media
+
+    depends_on:
+      - backend
+      - frontend
+  
+  celery:
+    build:
+      context: ./backend
+    
+    devices:
+      - /dev/video0:/dev/video0
+    
+    environment:
+      - CELERY_BROKER=redis://redis:6379/0
+      - CELERY_BACKEND=redis://redis:6379/0
+
+    command: celery -A rtmp.tasks worker --loglevel=INFO
+
+    depends_on:
+      - backend
+      - redis
+
+  redis:
+    image: redis:alpine
+
+volumes:
+  react_build:
+  media:

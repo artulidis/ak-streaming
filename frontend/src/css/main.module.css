@@ -1,0 +1,142 @@
+.mainPage {
+    position: fixed;
+    /* border: 1px solid green; */
+    width: 75%;
+    height: auto;
+    left: 55%;
+    margin-left: -37.5%;
+    top: 10vh;
+    z-index: -1;
+}
+
+.mainHeader {
+    width: 100%;
+    height: 5vh;
+    /* border: 1px solid red; */
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.discoverHeader {
+    color: white;
+    font-family: sans-serif;
+    text-transform: capitalize;
+}
+
+.discoverInput {
+    width: 30%;
+    height: 35px;
+    background: transparent;
+    border: 1px solid gray;
+    border-radius: 20px;
+    background: url(../icons/general/search-icon.png) no-repeat scroll 12px 6px;
+    padding-left: 40px;
+    color: lightgray;
+    font-size: 1.75vh;
+}
+
+.discoverInput:focus {
+    outline: none;
+}
+
+.categoryContainer {
+    width: 100%;
+    height: 85vh;
+    /* border: 1px solid orange; */
+    overflow: scroll;
+}
+
+.videoCategory {
+    width: 100%;
+    height: auto;
+    /* border: 1px solid pink; */
+    margin: 5vh 0vh 5vh 0;
+}
+
+.categoryHeader {
+    font-family: sans-serif;
+    color: lightgray;
+    text-transform: uppercase;
+    font-size: 1.65vh;
+}
+
+.videosContainer {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    justify-items: left;
+    grid-row-gap: 5vh;
+    margin-top: 2vh;
+    /* border: 3px solid blueviolet */
+}
+
+.searchResultsContainer {
+    width: 100%;
+    height: auto;
+    margin-top: 5vh;
+}
+
+
+@media screen and (max-width: 1500px) {
+    .videosContainer {
+        grid-column-gap: 5vh;
+        /* border: 3px solid blueviolet; */
+    }
+
+    .discoverInput {
+        width: 33%;
+    }
+
+    .mainPage {
+        /* border: 1px solid green; */
+        width: 90%;
+        left: 5%;
+        margin-left: 0%;
+    }
+
+    .mainHeader {
+        width: 100%;
+        height: 5vh;
+        /* border: 1px solid red; */
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+}
+
+@media screen and (max-width: 1165px) {
+    .videosContainer {
+        grid-template-columns: repeat(2, 1fr);
+        grid-column-gap: 0vh;
+        width: 80%;
+        position: relative;
+        left: 50%;
+        margin-left: -40%;
+        /* border: 1px solid white; */
+        justify-items: center;
+    }
+
+    .discoverInput {
+        width: 37%;
+    }
+
+    .categoryHeader {
+        text-align: center;
+    }
+}
+
+@media screen and (max-width: 1000px) {
+    .videosContainer {
+        grid-template-columns: repeat(1, 1fr);
+    }
+
+    .discoverInput {
+        width: 37%;
+    }
+
+    .categoryHeader {
+        text-align: center;
+    }
+}

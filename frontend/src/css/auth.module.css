@@ -1,0 +1,236 @@
+:root {
+    --dark-gray: #505050;
+    --dark-blue: #488697;
+    --light-blue: #5ad6f7;
+}  
+
+.dormant {
+    background: white !important;
+    color: gray !important;
+}
+
+.active {
+    background: var(--dark-blue) !important;
+    color: white !important;
+}
+
+
+.loginContainer {
+    background: #414141;
+    width: 70vh;
+    height: 40vh;
+    position: absolute;
+    top: 40%;
+    left: 50%;
+    margin: -22.5vh 0 0 -35vh;
+    transition: height 300ms;
+}
+
+.actionButtons {
+    font-family: sans-serif;
+    text-transform: uppercase;
+    display: flex;
+    justify-content: center;
+    background: var(--dark-blue);
+}
+
+.actionButtons h3 {
+    width: 50%;
+    text-align: center;
+    height: 5vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-weight: 100;
+    color: white;
+    cursor: pointer;
+}
+
+.actionButtons h3:last-child {background: white; color: gray;}
+
+.form {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    justify-content: space-between;
+    height: 50%;
+    margin-top: 5vh;
+    width: 80%;
+    position: absolute;
+    left: 50%;
+    margin-left: -40%;
+}
+
+.form button {
+    width: 12vh;
+    height: 3vh;
+    font-size: 2vh;
+    background: var(--light-blue);
+    border: none;
+    border-radius: 7px;
+    color: white;
+    text-transform: uppercase;
+    cursor: pointer;
+}
+
+.form button:active {
+    box-shadow: -1px 1px white;
+}
+
+.form button:hover {
+    filter: brightness(0.8);
+    transition: 300ms;
+}
+
+.form div label {
+    color: #CBCBCB;
+    text-transform: uppercase;
+    font-family: sans-serif;
+    margin-right: 5vh;
+}
+
+.form div input {
+    background: #414141;
+    border-radius: 20px;
+    height: 4.5vh;
+    width: 40vh;
+    border: 2px solid var(--dark-blue);
+    color: #CBCBCB;
+    text-indent: 1.5vh;
+    font-size: 2vh;
+}
+
+.form div input:focus {outline: none;}
+
+.registerFormContainer {
+    width: 100%;
+    height: 100%;
+}
+
+.registerTopForms {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-around;
+    width: 110%;
+    margin-left: -5%;
+    height: 40%;
+}
+
+.registerTopForms div {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    
+}
+
+.registerLabel {
+    text-align: center;
+    width: 100%;
+    font-size: 1.5vh;
+}
+
+.registerInput {
+    width: 25vh !important;
+    height: 3vh !important;
+    font-size: 1.5vh !important;
+    margin-top: 1vh;
+}
+
+.registerAddAvatar>input {
+    display: none;
+}
+
+.registerImageLabel {
+    display: flex;
+    min-width: 100% !important;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.registerAddAvatar {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    width: 25vh;
+    height: 8vh;
+    /* border: 1px solid green; */
+}
+
+.registerAddIconContainer {
+    border: 2px solid gray;
+    border-radius: 100%;
+    display: flex;
+}
+
+.registerAddIcon {cursor: pointer;}
+
+.registerAddIcon:hover {
+    fill: gray;
+}
+
+.registerImageFile {
+    border-radius: 100%;
+    padding: 4px;
+    max-width: 6.25vh;
+    cursor: pointer;
+}
+
+.registerBio {
+    width: 56vh;
+    display: flex;
+    flex-direction: row;
+    align-items: top;
+    position: absolute;
+    bottom: 0vh;
+    height: 15vh;
+}
+
+.registerBio label {
+    text-align: left;
+    width: 5vh;
+}
+
+.registerBio textarea {
+    width: 55vh;
+    position: relative;
+    right: 0vh;
+    height: 60%;
+    background: none;
+    border: 2px solid var(--dark-blue);
+    border-radius: 10px;
+    color: #CBCBCB;
+    text-indent: 1.5vh;
+    font-size: 1vh;
+    padding-top: 1vh;
+}
+
+.registerButton {
+    position: absolute;
+    bottom : 0;
+    right: 0;
+}
+
+@keyframes errorMessage {
+    0% {
+        opacity: 1;
+    }
+    100% {
+        opacity: 0;
+    }
+}
+
+.errorMessage {
+    width: 70vh;
+    height: 5vh;
+    background: #C60101 ;
+    color: white;
+    font-family: sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: absolute;
+    top: -17vh;
+    left: 50%;
+    margin-left: -35vh;
+    animation: errorMessage 0.5s 1.5s ease-out forwards;
+}

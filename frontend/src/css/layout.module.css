@@ -1,0 +1,509 @@
+* {
+    padding: 0;
+    margin: 0;
+    box-sizing: border-box;
+}
+
+html {
+    background: #1D1D1D;
+}
+
+:root {
+    --dark-gray: #505050;
+    --dark-blue: #488697;
+    --light-blue: #5ad6f7;
+}  
+
+@keyframes bellIcon {
+    0% {transform: rotate(0deg);}
+
+    25% {transform: rotate(-60deg);}
+
+    50% {transform: rotate(30deg);}
+
+    75% {transform: rotate(-30deg);}
+    
+    100% {transform: rotate(0deg);}
+}
+
+.navbar {
+    position: fixed;
+    width: 100%;
+    height: 7vh;
+    /* border: 1px solid yellow; */
+}
+
+.sideBar {
+    position: fixed;
+    width: 25vh;
+    height: calc(100% - 7vh);
+    /* border: 1px solid green; */
+    bottom: 0;
+    font-family: sans-serif;
+    color: lightgray;
+    padding-left: 1.5vh;
+    overflow-y: scroll;
+    padding-right: 3px;
+    /* background: rgb(137, 107, 52); */
+}
+
+.sideBar h3 {text-transform: uppercase; margin: 1vh 0 2vh 0;}
+
+.menuContainer {
+    margin-bottom: 2vh;
+}
+
+.sideBarItem {
+    display: flex;
+    justify-content: left;
+    align-items: center;
+    background: var(--dark-gray);
+    position: relative;
+    right: 0;
+    width: 90%;
+    font-size: 1.25vh;
+    margin: 0 0 2vh 0vh;
+    cursor: pointer;
+    filter: brightness(80%);
+    border-radius: 10px;
+    transition: 300ms;
+}
+
+.sideBarItem:hover {filter: brightness(100%); box-shadow: -2px 2px var(--light-blue);}
+
+.sideBarIcon {
+    margin-top: 0.5vh;
+    transition: 300ms;
+}
+
+.sideBarItem:hover .sideBarIcon {
+    filter: brightness(140%);
+}
+
+.sideBarItem:hover .sideBarHeader {
+    color: white;
+}
+
+.sideBarHeader {margin-left: 1.5vh;}
+
+.sideBarDivider, .topicsDivider {
+    width: 100%;
+    height: 1px;
+    background: gray;
+}
+
+.subscriptionsHeader {
+    padding-bottom: 0vh;
+}
+
+.subscriptionContainer {
+    overflow-y: scroll;
+    height: auto;
+    max-height: 27.5vh;
+}
+
+.subscriptionLink {
+    text-decoration: none;
+}
+
+.subscription {
+    max-width: 90%;
+    height: 5vh;
+    background: var(--dark-gray);
+    border-radius: 10px;
+    margin: 0vh 0 2vh 0;
+    transition: 300ms;
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    filter: brightness(80%);
+}
+
+.subscription:hover {filter: brightness(100%); box-shadow: -2px 2px var(--light-blue);}
+
+.subscriptionProfilePicture {
+    height: 80%;
+    border-radius: 100%;
+    border: 1px solid lightgray;
+    padding: 2px;
+    margin-left: 1vh;
+}
+
+.subscription h4 {
+    font-size: 1.25vh;
+    margin-left: 1vh;
+    font-family: sans-serif;
+}
+
+.topicsDivider {
+    margin-top: 2vh;
+}
+
+.topicsContainer {
+    display: flex;
+    flex-wrap: wrap;
+    width: 90%;
+    min-height: 10vh;
+}
+
+.topic {
+    color: white;
+    font-size: 1.5vh;
+    width: 100%;
+    max-height: 3vh;
+    text-align: left;
+    background: var(--dark-blue);
+    margin-bottom: 2vh;
+    padding: 0.5vh 0 0.5vh 1vh;
+    border-radius: 20px;
+    box-shadow: 1px 1px white;
+    cursor: pointer;
+    filter: brightness(80%);
+    transition: 300ms;
+}
+
+.topic:hover {filter: brightness(100%);}
+
+.navbar h1 {
+    font-size: 3vh;
+    font-family: sans-serif;
+    color: white;
+    text-transform: uppercase;
+    margin: 1.5vh;
+    cursor: default;
+    display: inline-block;
+    font-weight: bold;
+    text-shadow: 2px 1px var(--light-blue);
+    /* border: 1px solid red; */
+}
+
+.notificationIcon, .profileImage {
+    position: absolute;
+    right: 15vh;
+    top: 2.5vh;
+    cursor: pointer;
+}
+
+.notificationIcon:hover {
+    animation: bellIcon 0.5s linear forwards;
+}
+
+.profileImage {
+    height: 6vh;
+    right: 8vh;
+    top: 0.35vh;
+    border: 1px solid lightgray;
+    border-radius: 100%;
+    padding: 2px;
+}
+
+.profileImage:hover {
+    border: 1px solid white;
+}
+
+
+.dropdown {
+    background: var(--dark-gray);
+    width: 20vh;
+    min-height:  6vh;
+    position: absolute;
+    top: 7vh;
+    right: 1vh;
+    border-radius: 10px;
+    box-shadow: -4px 4px var(--light-blue);
+    overflow: hidden;
+    padding-bottom: 2vh;
+    z-index: 10;
+}
+
+.menuItem {
+    transition: background 500ms;
+    margin-top: 1vh;
+    margin-left: 1vh;
+    padding-left: 1vh;
+    height: 3.5vh;
+    width: 90%;
+    text-decoration: none;
+    border-radius: 7px;
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+}
+
+.menuItem:hover {
+    background: var(--dark-blue);
+}
+
+.menuItem span, .loginButton {
+    color: white;
+    text-decoration: none;
+    font-family: sans-serif;
+    font-weight: 600;
+    font-size: 1.5vh;
+}
+
+.responsiveMenu {
+    display: none;
+}
+
+
+
+
+@media screen and (max-width: 1500px) {
+    .sideBar {
+        display: none;
+    }
+
+    .navbar {
+        position: fixed;
+        width: 100%;
+        height: 7vh;
+        background: rgb(46, 46, 46);
+        z-index: 100;
+    }
+
+    .navbar h1 {
+        font-size: 2.5vh;
+        margin-top: 1.75vh;
+    }
+
+    .profileImage {
+        right: 3vh;
+    }
+
+    .notificationIcon {
+        right: 10vh;
+    }
+
+    .responsiveMenu {
+        display: flex;
+        /* border: 1px solid yellow; */
+        width: 60%;
+        min-width: 600px;
+        height: 7vh;
+        position: absolute;
+        top: 0;
+        left: 55%;
+        margin-left: -30%;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .responsiveMenuHeading, .responsiveMenuHeadingSubscription, .responsiveMenuHeadingTopic {
+        text-transform: uppercase;
+        font-family: sans-serif;
+        color: lightgray;
+        /* border: 1px solid lime; */
+        font-size: 1.75vh;
+        display: block;
+        cursor: pointer;
+    }
+
+    .responsiveMenuHeadingSubscription, .responsiveMenuHeadingTopic {
+        height: auto;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        /* border: 1px solid lime; */
+    }
+
+    .responsiveMenuHeading:hover, .responsiveMenuHeadingSubscription:hover, .responsiveMenuHeadingTopic:hover {
+        color: white;
+    }
+
+    .responsiveMenuHeadingContainer {
+        width: auto;
+        height: 7vh;
+        /* border: 1px solid orange; */
+        display: flex;
+        align-items: center;
+    }
+
+    .responsiveSubscriptionContainer {
+        display: flex;
+        position: relative;
+        flex-direction: column;
+        /* border: 1px solid purple; */
+        width: auto;
+        align-self: flex-start;
+    }
+
+    .responsiveSubscriptions, .responsiveTopics {
+        overflow-y: scroll;
+        height: auto;
+        position: absolute;
+        margin-top: 7vh;
+        margin-left: -3vh;
+        width: 22vh;
+        background: var(--dark-gray);
+        max-height: 30vh;
+        /* border: 1px solid white; */
+        padding: 1vh 0 3vh 0;
+        border-radius: 10px;
+        box-shadow: -4px 4px var(--light-blue);
+        display: none;
+        flex-direction: column;
+        align-items: left;
+    }
+
+    .subscriptionProfilePicture {
+        height: 3vh;
+    }
+
+    .subscriptionLink {
+        width: 20vh;
+        height: 4vh;
+        margin-top: 1vh;
+        /* border: 1px solid red; */
+        margin-left: 1vh;
+    }
+
+    .subscription {
+        width: 100%;
+        height: 4vh;
+        max-width: 100%;
+        background: transparent;
+        filter: brightness(100%);
+        /* border: 1px solid yellow; */
+    }
+
+    .subscription:hover {
+        box-shadow: none;
+        background: var(--dark-blue);
+    }
+
+    .responsiveTopics {
+        margin-top: 7vh;
+        margin-left: -6vh;
+        /* border: 1px solid red; */
+        align-items: center;
+        width: 20vh;
+    }
+
+    .responsiveMenuLink {
+        text-decoration: none;
+    }
+    
+    .topic {
+        /* border: 1px solid lime; */
+        font-family: sans-serif;
+        color: white;
+        font-size: 1.5vh;
+        height: 2.25vh;
+        max-height: auto;
+        text-indent: 1vh;
+        filter: brightness(100%);
+        background: transparent;
+        margin-bottom: 1.5vh;
+        padding-top: 0.125vh;
+        border-radius: 5px;
+        box-shadow: none;
+    }
+
+    .topic::before {
+        content: "•";
+        margin-right: 1vh;
+        opacity: 0.7;
+    }
+
+    .topic:hover {
+        background: var(--dark-blue);
+    }
+
+}
+
+@media screen and (max-width: 1165px) {
+    .navbar, .responsiveMenu, .responsiveMenuHeadingSubscription {
+        height: 5vh;
+    }
+
+    .responsiveMenuHeading, .responsiveMenuHeadingSubscription, .responsiveMenuHeadingTopic {
+        font-size: 1.5vh;
+    }
+
+    .responsiveMenu {
+        width: 70%;
+        min-width: 600px;
+        left: 53.5%;
+        margin-left: -35%;
+        justify-content: space-around;
+    }
+
+    .navbar h1 {
+        font-size: 2vh;
+        margin-top: 1.25vh;
+    }
+
+    .profileImage {
+        right: 3vh;
+        height: 4vh;
+        top: 0.5vh;
+    }
+
+    .notificationIcon {
+        right: 8vh;
+        top: 1.75vh;
+    }
+
+    .responsiveMenuHeadingSubscription {
+        height: auto;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        /* border: 1px solid lime; */
+    }
+
+    .dropdown {
+        top: 5vh;
+    }
+
+    .responsiveSubscriptions, .responsiveTopics {
+        width: 22vh;
+        margin-top: 5vh;
+        margin-left: -4vh;
+        padding: 1vh 0 2vh 0;
+    }
+    
+    .responsiveTopics {
+        margin-top: 5vh;
+        margin-left: -7vh;
+    }
+
+    .responsiveMenuHeadingContainer {
+        height: 5vh;
+    }
+
+    .subscriptionLink {
+        width: 20vh;
+        height: 4vh;
+        margin-top: 1vh;
+        margin-bottom: 1vh;
+    }
+
+    .subscription {
+        height: 4vh;
+    }
+}
+
+@media screen and (max-width: 1000px) {
+    .responsiveMenuHeading, .responsiveMenuHeadingSubscription, .responsiveMenuHeadingTopic {
+        font-size: 1.25vh;
+    }
+
+    .navbar h1 {
+        font-size: 1.75vh;
+        margin-top: 1.35vh;
+    }
+
+    .responsiveMenu {
+        width: 65%;
+        min-width: 500px;
+        left: 53.5%;
+        margin-left: -32.5%;
+    }
+
+    .responsiveSubscriptions {
+        margin-left: -5vh;
+    }
+}
