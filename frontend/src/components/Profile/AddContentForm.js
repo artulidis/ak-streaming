@@ -197,7 +197,7 @@ const AddContentForm = () => {
         
             <div className={styles.durationSetupItem}>
                 <label className={styles.setupLabel}>duration:</label>
-                <input className={styles.setupInput} type="number" value={duration} min="0" onChange={(e) => {setDuration(e.target.value)}}></input><span>mins</span>
+                <input className={styles.setupInput} type="number" value={duration} min="0" onChange={(e) => {setDuration(e.target.value)}}></input><span>sec</span>
             </div>
         </div>
 
