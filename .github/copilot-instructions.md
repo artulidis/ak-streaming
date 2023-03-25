@@ -3,7 +3,7 @@
 - Start every substantial task by reading [docs/vision.md](../docs/vision.md) and [docs/current-milestone.md](../docs/current-milestone.md).
 - Stay within the active milestone. Do not propose or implement work outside that scope unless the user explicitly changes the milestone.
 - Keep documentation minimal. Add or expand docs only when they are required for the current milestone.
-- Prefer small, reversible changes that fit the documented trunk-based workflow.
+- Prefer small, reversible changes that fit the documented branch workflow.
 - When an agent believes it has completed the active milestone, it must compare its work against the active milestone's completion criteria before treating the work as complete.
 - At that point, the agent must present a review summary of all changes it made and explain why each change was made, then ask the user whether the milestone is complete or whether more work is needed.
 - If the user wants more work, the agent must ask for further direction and continue within the current milestone rather than assuming completion.

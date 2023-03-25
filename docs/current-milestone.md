@@ -6,7 +6,7 @@ Integrate professional development practices into the project and make the codeb
 
 ## In Scope
 
-- Document a uniform GitHub workflow using trunk-based development with short-lived feature branches.
+- Document a uniform GitHub workflow using a stable `main` branch, a milestone-integration `working` branch, and short-lived topic branches.
 - Provide the repo-owned commit template and local setup instructions.
 - Improve repository hygiene for cleaner diffs and searches.
 - Configure Ruff and pre-commit.

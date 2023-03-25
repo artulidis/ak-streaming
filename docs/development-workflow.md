@@ -2,12 +2,17 @@
 
 ## Branching
 
-Use trunk-based development with short-lived feature branches.
+Use a staged integration workflow with a stable branch, an integration branch,
+and short-lived topic branches.
 
-- `main` is the trunk.
-- Create a short-lived branch for each focused change.
-- Rebase onto `main` before merging when needed.
-- Merge small, reviewable changes back to `main` quickly.
+- `main` is the stable branch for completed project phases.
+- `working` is the integration branch for completed milestones within the
+	current phase.
+- Create a short-lived topic branch from `working` for each focused change.
+- Merge completed topic branches back into `working`.
+- Merge `working` into `main` only when a full phase is ready.
+- After promoting a phase to `main`, recreate or reset `working` from `main`
+	before starting the next phase.
 
 ## Commit Messages
 
