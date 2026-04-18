@@ -1,17 +1,10 @@
-from argparse import ONE_OR_MORE
-from doctest import BLANKLINE_MARKER
-from typing_extensions import Self
-from django.db import models
-from django.core.validators import MinValueValidator
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager
-
+from django.core.validators import MinValueValidator
 from django.db import models
-from django.contrib.auth.models import (
-    BaseUserManager, AbstractBaseUser
-)
+
 
 def upload_to(instance, filename):
-    return f'profile_images/{filename}'.format(filename=filename)
+    return f"profile_images/{filename}"
 
 
 class MyUserManager(BaseUserManager):
@@ -19,9 +12,9 @@ class MyUserManager(BaseUserManager):
         user = self.model(
             username=username
         )
-        user.is_active=True
-        user.is_superuser=False
-        user.is_staff=False
+        user.is_active = True
+        user.is_superuser = False
+        user.is_staff = False
         user.set_password(password)
         user.save(using=self._db)
         return user
@@ -31,14 +24,16 @@ class MyUserManager(BaseUserManager):
             username=username,
             password=password,
         )
-        user.is_active=True
-        user.is_superuser=True
-        user.is_staff=True
+        user.is_active = True
+        user.is_superuser = True
+        user.is_staff = True
         user.save()
         return user
 
+
 class MyUser(AbstractBaseUser):
     objects = MyUserManager()
+
     class Meta:
         db_table = 'user_entity'
 
@@ -110,4 +105,4 @@ class Comment(models.Model):
     created = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"{self.body}"   
+        return f"{self.body}"

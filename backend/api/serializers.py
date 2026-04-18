@@ -1,6 +1,6 @@
-from rest_framework.serializers import ModelSerializer, SlugRelatedField
 from rest_framework import serializers
-from rest_framework.validators import UniqueValidator
+from rest_framework.serializers import ModelSerializer, SlugRelatedField
+
 from .models import MyUser, UserFollowingCount, WatchList, Video, Comment, Topic
 
 class MyUserProfileImageSerializer(serializers.ModelSerializer):
