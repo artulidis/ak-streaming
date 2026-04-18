@@ -1,10 +1,8 @@
-from rest_framework import generics, status
-from rest_framework.response import Response
-from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
+from rest_framework import generics, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser
-import json
+from rest_framework.response import Response
 
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
@@ -52,8 +50,8 @@ class MyUserRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
 
 
     def get_queryset(self):
-        self.username = get_object_or_404(MyUser, username=self.kwargs['username'])
-        return MyUser.objects.filter(username=self.username)
+        user = get_object_or_404(MyUser, username=self.kwargs['username'])
+        return MyUser.objects.filter(username=user)
 
     def perform_update(self, serializer):
         return super().perform_update(serializer)
@@ -64,8 +62,10 @@ class UserFollowingCountRetrieveUpdateAPIView(generics.RetrieveUpdateAPIView):
     lookup_field = 'owner'
 
     def get_queryset(self):
-        self.list = UserFollowingCount.objects.get_or_create(owner=MyUser.objects.get(id=self.kwargs['owner']))
-        return UserFollowingCount.objects.filter(owner=self.list[0].owner.id)
+        following_count, _ = UserFollowingCount.objects.get_or_create(
+            owner=MyUser.objects.get(id=self.kwargs['owner'])
+        )
+        return UserFollowingCount.objects.filter(owner=following_count.owner.id)
 
 class MyUserFollowRetrieveUpdateAPIView(generics.RetrieveUpdateAPIView):
     serializer_class = MyUserFollowSerializer

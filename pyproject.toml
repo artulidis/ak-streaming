@@ -1,0 +1,19 @@
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+extend-exclude = [
+    "backend/api/migrations",
+    "frontend/build",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",
+    "F",
+    "I",
+    "UP",
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

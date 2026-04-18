@@ -1,0 +1,11 @@
+<type>[optional scope]: <description>
+
+[optional body]
+
+[optional footer(s)]
+
+# --- Guidelines ---
+# Type: feat, fix, docs, style, refactor, test, chore
+# Subject: Max 50 chars, imperative mood, no period at end
+# Body: Explain WHAT and WHY (not how), wrap at 72 chars
+# Footer: Reference issues (e.g., Fixes #123) or Breaking Changes
