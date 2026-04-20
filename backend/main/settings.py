@@ -15,8 +15,6 @@ from datetime import timedelta
 import os
 import environ
 
-from telnetlib import AUTHENTICATION
-
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -174,7 +172,7 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-AUTH_USER_MODEL = 'api.MyUser'
+AUTH_USER_MODEL = 'api.User'
 
 
 
