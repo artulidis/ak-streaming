@@ -1,139 +1,207 @@
+from django.contrib.auth import get_user_model
 from rest_framework import serializers
-from rest_framework.serializers import ModelSerializer, SlugRelatedField
 
-from .models import MyUser, UserFollowingCount, WatchList, Video, Comment, Topic
+from .models import ChatMessage, Follow, StreamSession, Topic, Video, VideoReaction
 
-class MyUserProfileImageSerializer(serializers.ModelSerializer):
+User = get_user_model()
+
+
+class UserSummarySerializer(serializers.ModelSerializer):
     class Meta:
-        model = MyUser
+        model = User
         fields = (
-                  'username',
-                  'profile_image'
-                  )
+            'id',
+            'username',
+            'display_name',
+            'avatar_url',
+        )
+        read_only_fields = fields
 
-class MyUserFollowSerializer(serializers.ModelSerializer):
+
+class UserRegistrationSerializer(serializers.ModelSerializer):
     class Meta:
-        model = MyUser
+        model = User
         fields = (
-                  'username',
-                  'followers'
-                  )
-class VideoThumbnailSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Video
-        fields = (
-                  'id',
-                  'thumbnail'
-                  )
-
-class VideoLikesDislikesSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Video
-        fields = (
-                  'id',
-                  'likes',
-                  'dislikes'
-                  )
-
-class MyUserSerializer(serializers.ModelSerializer):
-
-    class Meta:
-        model = MyUser
-        fields = (
-                  'id',
-                  'username',
-                  'password',
-                  'email',
-                  'full_name',
-                  'profile_image',
-                  'followers',
-                  'bio'
-                  )
-
+            'id',
+            'username',
+            'email',
+            'password',
+        )
+        read_only_fields = ('id',)
+        extra_kwargs = {
+            'password': {'write_only': True, 'trim_whitespace': False},
+            'email': {'required': True},
+        }
 
     def create(self, validated_data):
-        user = MyUser.objects.create_user(validated_data['username'], validated_data['password'])
-        user.email = validated_data['email']
-        user.full_name = validated_data['full_name']
-        user.profile_image = validated_data['profile_image']
-        user.followers = validated_data['followers']
-        user.bio = validated_data['bio']
-        user.save()
-        return user
-
-    def update(self, user, validated_data):
-        if validated_data['password'] is not None:
-            user.set_password(validated_data['password'])
-        user.username = validated_data['username']
-        user.email = validated_data['email']
-        user.full_name = validated_data['full_name']
-        if validated_data['profile_image'] is not None:
-            user.profile_image = validated_data['profile_image']
-        else:
-            user.profile_image = user.profile_image
+        return User.objects.create_user(**validated_data)
 
 
-        user.followers = validated_data['followers']
-        user.bio = validated_data['bio']
-        user.save()
-        return user
-
-
-class UserFollowingCountSerializer(ModelSerializer):
-    
-    owner = SlugRelatedField(
-        slug_field='username',
-        queryset=MyUser.objects.all()
-    )
-
-
+class UserProfileSerializer(serializers.ModelSerializer):
     class Meta:
-        model = UserFollowingCount
-        fields = ('owner', 'users')
+        model = User
+        fields = (
+            'id',
+            'username',
+            'display_name',
+            'bio',
+            'avatar_url',
+            'followers_count',
+            'following_count',
+        )
+        read_only_fields = (
+            'id',
+            'username',
+            'followers_count',
+            'following_count',
+        )
 
 
-class WatchListSerializer(ModelSerializer):
-
-    user = SlugRelatedField(
-        slug_field='username',
-        queryset=MyUser.objects.all()
-    )
-
-    class Meta:
-        model = WatchList
-        fields = '__all__'
-
-
-class TopicSerializer(ModelSerializer):
-
+class TopicSerializer(serializers.ModelSerializer):
     class Meta:
         model = Topic
-        fields = '__all__'
+        fields = (
+            'id',
+            'name',
+        )
+        read_only_fields = ('id',)
+
+    def validate_name(self, value):
+        cleaned_value = value.strip()
+        if not cleaned_value:
+            raise serializers.ValidationError('Topic name cannot be blank.')
+        return cleaned_value
 
 
-class VideoSerializer(ModelSerializer):
-
-    topics = TopicSerializer(read_only=True, many=True)
-    user = SlugRelatedField(slug_field='username', queryset=MyUser.objects.all())
+class VideoSerializer(serializers.ModelSerializer):
+    user = UserSummarySerializer(read_only=True)
+    topics = TopicSerializer(many=True, read_only=True)
+    topic_ids = serializers.PrimaryKeyRelatedField(
+        source='topics',
+        many=True,
+        queryset=Topic.objects.all(),
+        required=False,
+        write_only=True,
+    )
 
     class Meta:
         model = Video
-        fields = '__all__'
+        fields = (
+            'id',
+            'user',
+            'name',
+            'description',
+            'views',
+            'like_count',
+            'dislike_count',
+            'topics',
+            'topic_ids',
+            'thumbnail',
+            'created',
+        )
+        read_only_fields = (
+            'id',
+            'user',
+            'views',
+            'like_count',
+            'dislike_count',
+            'created',
+        )
 
-class VideoTopicSerializer(ModelSerializer):
+    def validate_name(self, value):
+        cleaned_value = value.strip()
+        if not cleaned_value:
+            raise serializers.ValidationError('Video name cannot be blank.')
+        return cleaned_value
 
-    user = SlugRelatedField(slug_field='username', queryset=MyUser.objects.all())
+
+class FollowSerializer(serializers.ModelSerializer):
+    follower = UserSummarySerializer(read_only=True)
+    following = serializers.SlugRelatedField(
+        slug_field='username',
+        queryset=User.objects.all(),
+    )
 
     class Meta:
-        model = Video
-        fields = '__all__'
+        model = Follow
+        fields = (
+            'id',
+            'follower',
+            'following',
+            'created_at',
+        )
+        read_only_fields = (
+            'id',
+            'follower',
+            'created_at',
+        )
+
+    def validate_following(self, value):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated and value == request.user:
+            raise serializers.ValidationError('Users may not follow themselves.')
+        return value
 
 
-    
-class CommentSerializer(ModelSerializer):
-
-    user = SlugRelatedField(slug_field='username', queryset=MyUser.objects.all())
+class VideoReactionSerializer(serializers.ModelSerializer):
+    user = UserSummarySerializer(read_only=True)
 
     class Meta:
-        model = Comment
-        fields = '__all__'
+        model = VideoReaction
+        fields = (
+            'id',
+            'user',
+            'video',
+            'reaction',
+            'created_at',
+        )
+        read_only_fields = (
+            'id',
+            'user',
+            'created_at',
+        )
+
+
+class StreamSessionSerializer(serializers.ModelSerializer):
+    user = UserSummarySerializer(read_only=True)
+
+    class Meta:
+        model = StreamSession
+        fields = (
+            'id',
+            'user',
+            'video',
+            'is_live',
+            'started_at',
+        )
+        read_only_fields = (
+            'id',
+            'user',
+            'is_live',
+            'started_at',
+        )
+
+
+class ChatMessageSerializer(serializers.ModelSerializer):
+    user = UserSummarySerializer(read_only=True)
+
+    class Meta:
+        model = ChatMessage
+        fields = (
+            'id',
+            'video',
+            'user',
+            'message',
+            'created_at',
+        )
+        read_only_fields = (
+            'id',
+            'user',
+            'created_at',
+        )
+
+    def validate_message(self, value):
+        cleaned_value = value.strip()
+        if not cleaned_value:
+            raise serializers.ValidationError('Message cannot be blank.')
+        return cleaned_value

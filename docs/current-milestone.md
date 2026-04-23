@@ -2,32 +2,46 @@
 
 ## Goal
 
-Reorganize and optimize the backend data model for a read-heavy, high-concurrency streaming system.
+Reorganize and clean the backend API layer so the model serializers,
+API views, and URL structure are production-grade, secure, and aligned
+with Django REST Framework best practices.
 
 ## In Scope
 
-- Replace implicit M2M relationships (likes, dislikes, follows) with explicit edge tables and denormalized counters.
-- Separate ephemeral state (live chat, stream sessions) from persistent content (videos, user profiles).
-- Tighten nullability and enforce data integrity at the schema level.
-- Add deliberate indexing aligned with dominant query patterns.
-- Remove unused models (WatchList, UserFollowingCount).
-- Update serializers, views, URLs, and WebSocket consumers to match the revised model.
-- Generate and validate Django migrations for the new schema.
+- Rework model serializers so they match the revised models, fields,
+	and relationships.
+- Reorganize API views around clear DRF conventions, safe create and
+	update flows, and production-grade request handling.
+- Restructure API URLs so resource, detail, and nested routes follow a
+	consistent REST-oriented pattern.
+- Remove references to deleted models and obsolete fields from
+	serializers, views, and URL wiring.
+- Tighten authentication, permissions, and validation for mutating
+	endpoints.
+- Remove debug behavior and unsafe patterns from the API layer.
+- Align the API layer cleanly with the revised data model so it is ready
+	for future testing and hardening work.
 
 ## Out of Scope
 
 - Tests and test-suite buildout.
-- Caching and buffering layers (Redis, async counter flushes).
+- Caching, throttling, and buffering layers.
 - Docker and deployment changes.
 - Frontend changes.
 - Streaming infrastructure repairs.
+- New product features beyond reorganizing the existing API surface.
 
 ## Done Means
 
-- The revised models compile and pass `makemigrations` / `migrate` cleanly.
-- Serializers, views, and URL routes reference only the new models.
-- The WebSocket consumer writes to `ChatMessage` instead of `Comment`.
-- No references to removed models (`WatchList`, `UserFollowingCount`, old M2M likes/dislikes) remain in application code.
-- The data model matches the design rationale documented by the user.
+- Model serializers reference only the current models and fields.
+- API views follow DRF best practices for querysets, lookups,
+	validation, and create or update behavior.
+- URL routes are consistent, REST-oriented, and mapped cleanly to the
+	reorganized API views.
+- Mutating endpoints enforce appropriate authentication and permission
+	checks.
+- Debug prints and unsafe API-layer behavior have been removed.
+- The API layer matches the revised data model and is ready for
+	production-grade follow-up work.
 
 Meeting these criteria means the milestone appears technically complete. Final milestone completion still requires explicit user confirmation before the work is treated as signed off.
