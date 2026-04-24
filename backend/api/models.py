@@ -1,6 +1,7 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.db.models import CheckConstraint, Index, Q, UniqueConstraint
+from django.utils import timezone
 
 
 class User(AbstractUser):
@@ -90,20 +91,40 @@ class VideoReaction(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
 
+class AccountStreamKey(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='account_stream_key')
+    stream_key_hash = models.CharField(max_length=255)
+    stream_key_last4 = models.CharField(max_length=4)
+    rotated_at = models.DateTimeField(default=timezone.now)
+
+
 class StreamSession(models.Model):
     class Meta:
         indexes = [
             Index(fields=['user', 'is_live']),
             Index(fields=['video', 'is_live']),
         ]
+        constraints = [
+            UniqueConstraint(
+                fields=['user'],
+                condition=Q(is_live=True),
+                name='unique_live_stream_session_per_user',
+            ),
+            UniqueConstraint(
+                fields=['video'],
+                condition=Q(is_live=True),
+                name='unique_live_stream_session_per_video',
+            ),
+        ]
 
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     video = models.ForeignKey(Video, on_delete=models.CASCADE)
 
-    stream_key = models.CharField(max_length=255, unique=True)
+    playback_id = models.CharField(max_length=255, unique=True)
     is_live = models.BooleanField(default=True)
 
     started_at = models.DateTimeField(auto_now_add=True)
+    ended_at = models.DateTimeField(blank=True, null=True)
 
 
 class ChatMessage(models.Model):

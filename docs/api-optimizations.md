@@ -355,3 +355,65 @@ Date: 2026-04-23
 	- Websocket connect to `ws/videos/{id}/?token=...` succeeded, and sending a payload with a spoofed `user` value still persisted and broadcast the authenticated user from the token.
 	- The active websocket client in `frontend/src/pages/VideoPage.js` was updated to use the new tokenized `ws/videos/{id}/` URL shape and no longer sends caller identity in the payload.
 	- `docker compose run --rm --build ... backend python manage.py migrate` completed successfully against the compose-backed PostgreSQL service and applied the `token_blacklist` migration set in the real database environment.
+
+## Phase 7 - Streaming Control Plane Start: Account Stream Keys, Live Session Resource, and Internal RTMP Validation
+
+Date: 2026-04-24
+
+### Exact changes made
+
+1. Added `AccountStreamKey` to [backend/api/models.py](c:/Users/artul/OneDrive/Desktop/Projects/WebStream/backend/api/models.py) as a dedicated account-level publisher credential model with exactly these fields: `user`, `stream_key_hash`, `stream_key_last4`, and `rotated_at`.
+2. Refactored `StreamSession` in the same model file so it no longer owns a private publish credential, renaming the old `stream_key` field to `playback_id`, adding nullable `ended_at`, and adding conditional uniqueness constraints so only one live session can exist per user and per video.
+3. Added [backend/api/streaming.py](c:/Users/artul/OneDrive/Desktop/Projects/WebStream/backend/api/streaming.py) as a small shared backend lifecycle module for stream-key rotation, hashed key verification, active-session lookup, live-session creation, live-session termination, and RTMP publish-auth validation.
+4. Replaced the old `StreamSessionSerializer` in [backend/api/serializers.py](c:/Users/artul/OneDrive/Desktop/Projects/WebStream/backend/api/serializers.py) with `StreamSessionReadSerializer`, which exposes only public live-session state plus computed playback URLs, and added `AccountStreamKeySerializer` plus `AccountStreamKeyRotateResponseSerializer` for owner-only stream-key metadata and one-time plaintext rotation responses.
+5. Updated [backend/api/views.py](c:/Users/artul/OneDrive/Desktop/Projects/WebStream/backend/api/views.py) to add `VideoStreamSessionView`, which exposes `GET`, `POST`, and `DELETE` on the video-scoped live-session singleton, returns `201 Created` on successful start, returns `409 Conflict` on duplicate live-session attempts, and keeps delete idempotent.
+6. Updated the same view module to add `AccountStreamKeyView` and `AccountStreamKeyRotateView`, creating a dedicated owner-only account stream key management surface that is separate from the existing user profile views.
+7. Updated [backend/api/urls.py](c:/Users/artul/OneDrive/Desktop/Projects/WebStream/backend/api/urls.py) to register the new `account/stream-key/`, `account/stream-key/rotate/`, and `videos/<id>/stream-session/` routes without mixing any stream-key metadata into the existing user routes.
+8. Added [backend/api/migrations/0002_account_stream_keys_and_stream_sessions.py](c:/Users/artul/OneDrive/Desktop/Projects/WebStream/backend/api/migrations/0002_account_stream_keys_and_stream_sessions.py) to create the new account stream key table, rename the old `StreamSession.stream_key` column to `playback_id`, add `ended_at`, end duplicate live sessions before constraints are applied, and enforce the new one-live-session invariants.
+9. Replaced the unsafe RTMP start flow in [backend/rtmp/views.py](c:/Users/artul/OneDrive/Desktop/Projects/WebStream/backend/rtmp/views.py) with `InternalPublishAuthView` and `InternalPublishEndView`, both designed for nginx RTMP callbacks instead of public client use.
+10. Updated [backend/rtmp/urls.py](c:/Users/artul/OneDrive/Desktop/Projects/WebStream/backend/rtmp/urls.py) so the RTMP app now exposes only `publish-auth/` and `publish-end/` callback routes, removed the Celery-backed shell-execution path by deleting [backend/rtmp/tasks.py](c:/Users/artul/OneDrive/Desktop/Projects/WebStream/backend/rtmp/tasks.py), and changed [backend/main/urls.py](c:/Users/artul/OneDrive/Desktop/Projects/WebStream/backend/main/urls.py) so the RTMP include point is now `rtmp/internal/` instead of the old public `rtmp/start/` surface.
+11. Updated [backend/websocket/consumers.py](c:/Users/artul/OneDrive/Desktop/Projects/WebStream/backend/websocket/consumers.py) so websocket connect and message persistence now require an active `StreamSession` for the target video instead of only checking whether the video exists.
+12. Updated [nginx/nginx.conf](c:/Users/artul/OneDrive/Desktop/Projects/WebStream/nginx/nginx.conf) so RTMP publish is no longer unconditional and now calls the backend through `on_publish` and `on_publish_done` hooks wired to the new internal validation endpoints.
+
+### Why each change was made
+
+1. Publisher authentication should not be stored on `StreamSession` because session state and account credentials have different lifecycles. The dedicated `AccountStreamKey` model separates reusable account credentials from video-scoped live-session state.
+2. `StreamSession` is meant to represent whether a specific video is live, not to own a private secret. Recasting it around public playback identity plus lifecycle timestamps keeps the resource aligned with its actual responsibility.
+3. Stream-key verification, session creation, RTMP ingress checks, and websocket live-session checks all depend on the same invariants. A small shared module prevents those rules from being duplicated across unrelated view and consumer code.
+4. The serializer contract now matches the trust boundary: public session reads expose playback information, owner-only key metadata stays separate, and plaintext stream keys are returned only once at rotation time.
+5. A video-scoped singleton session view makes the live-session resource explicit and gives the API a direct place to enforce ownership, idempotent shutdown, and one-live-session conflict handling.
+6. Stream-key management should not leak into normal profile reads or username-based user detail endpoints. The separate account-key views keep that sensitive operational surface private to the authenticated owner.
+7. The route layer now reflects the contract directly: live-session control is nested under the video it governs, while reusable account credentials live under an owner-only account surface.
+8. The model changes are not safe without a migration path. The new migration keeps existing session rows compatible, handles duplicate live-session cleanup before constraints are enforced, and preserves migration-backed validation.
+9. The previous RTMP entry point accepted raw client-supplied shell commands and dispatched them into `os.system()`. Replacing it with internal publish lifecycle callbacks removes that unsafe boundary entirely.
+10. Removing the task file and the public RTMP start route ensures there is no leftover backend path that can still launch arbitrary publish commands, while moving the include under `rtmp/internal/` makes the remaining routes infrastructure-oriented rather than client-facing.
+11. A websocket chat tied only to video existence allows connections even when nothing is live. Requiring an active `StreamSession` keeps realtime chat aligned with the live-stream lifecycle.
+12. Backend validation is only meaningful if the ingress layer actually calls it. The nginx RTMP hook changes are what turn the new publish-auth logic into an enforced runtime boundary instead of dead backend code.
+
+### How this contributes to optimizing the API layer
+
+- Separates reusable publisher authentication from video-scoped live-session state, which makes both resources clearer and safer to evolve.
+- Removes the highest-risk streaming entry point by deleting the public raw-command RTMP start flow and replacing it with server-validated ingress callbacks.
+- Keeps sensitive stream-key operations off the public user profile surface while still exposing a clean owner-only management contract.
+- Aligns websocket chat with actual live-session state instead of permitting chat whenever a video record exists.
+- Extends the backend toward the Phase 3 streaming control-plane design without introducing any new frontend dependency or transport-layer trust in client-provided commands.
+
+### Validation
+
+- `c:/Users/artul/OneDrive/Desktop/Projects/WebStream/.venv/Scripts/python.exe -m py_compile backend/api/models.py backend/api/streaming.py backend/api/serializers.py backend/api/views.py backend/api/urls.py backend/api/migrations/0002_account_stream_keys_and_stream_sessions.py`
+- Result: passed with no output.
+- `c:/Users/artul/OneDrive/Desktop/Projects/WebStream/.venv/Scripts/python.exe -m py_compile backend/rtmp/views.py backend/rtmp/urls.py backend/main/urls.py backend/websocket/consumers.py`
+- Result: passed with no output.
+- `backend/manage.py check` was executed successfully after supplying `SECRET_KEY`, `POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD` in the shell.
+- `backend/manage.py makemigrations --check --dry-run` reported `No changes detected`. Django also emitted a runtime warning that the default database host could not be resolved while checking migration history, but the model-to-migration diff itself was clean.
+- Additional backend-only runtime verification was executed against a temporary SQLite database with the real migration path enabled, an in-memory Channels layer, and the real ASGI application wiring.
+- Verified behavior:
+	- `POST /api/v1/account/stream-key/rotate/` returned `200`, returned a plaintext `stream_key` once, and returned `stream_key_last4` matching that value.
+	- `GET /api/v1/account/stream-key/` returned `200` and did not expose the plaintext `stream_key`.
+	- `GET /api/v1/users/{username}/` still returned `200` and did not expose any stream-key fields.
+	- `POST /api/v1/videos/{id}/stream-session/` returned `201` with `playback_id`, `hls_url`, and `recording_url`, and did not expose any private stream-key material.
+	- A non-owner `POST /api/v1/videos/{id}/stream-session/` returned `403`.
+	- A second owner `POST /api/v1/videos/{id}/stream-session/` attempt returned `409`.
+	- `POST /rtmp/internal/publish-auth/` with a valid `playback_id` plus valid reusable account stream key returned `204`, while the same route with invalid key material returned `403`.
+	- Websocket connect to `ws/videos/{id}/?token=...` succeeded while the target video had an active live session, and sending a payload still persisted and broadcast the authenticated websocket user.
+	- `DELETE /api/v1/videos/{id}/stream-session/` returned `204`, and websocket connect to the same `ws/videos/{id}/?token=...` route failed once the live session had ended.

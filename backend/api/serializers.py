@@ -2,7 +2,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 
-from .models import ChatMessage, Follow, StreamSession, Topic, Video, VideoReaction
+from .models import AccountStreamKey, ChatMessage, Follow, StreamSession, Topic, Video, VideoReaction
 
 User = get_user_model()
 
@@ -173,8 +173,10 @@ class VideoReactionWriteSerializer(serializers.Serializer):
     reaction = serializers.ChoiceField(choices=(('like', 'like'), ('dislike', 'dislike')))
 
 
-class StreamSessionSerializer(serializers.ModelSerializer):
+class StreamSessionReadSerializer(serializers.ModelSerializer):
     user = UserSummarySerializer(read_only=True)
+    hls_url = serializers.SerializerMethodField()
+    recording_url = serializers.SerializerMethodField()
 
     class Meta:
         model = StreamSession
@@ -182,14 +184,56 @@ class StreamSessionSerializer(serializers.ModelSerializer):
             'id',
             'user',
             'video',
+            'playback_id',
             'is_live',
             'started_at',
+            'ended_at',
+            'hls_url',
+            'recording_url',
         )
         read_only_fields = (
             'id',
             'user',
+            'video',
+            'playback_id',
             'is_live',
             'started_at',
+            'ended_at',
+            'hls_url',
+            'recording_url',
+        )
+
+    def get_hls_url(self, obj):
+        return self._build_stream_url(f'/stream/hls/{obj.playback_id}.m3u8')
+
+    def get_recording_url(self, obj):
+        return self._build_stream_url(f'/stream/rec/{obj.playback_id}.mp4')
+
+    def _build_stream_url(self, path):
+        request = self.context.get('request')
+        if request is None:
+            return path
+        return request.build_absolute_uri(path)
+
+
+class AccountStreamKeySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AccountStreamKey
+        fields = (
+            'stream_key_last4',
+            'rotated_at',
+        )
+        read_only_fields = fields
+
+
+class AccountStreamKeyRotateResponseSerializer(AccountStreamKeySerializer):
+    stream_key = serializers.CharField(read_only=True)
+
+    class Meta(AccountStreamKeySerializer.Meta):
+        fields = (
+            'stream_key',
+            'stream_key_last4',
+            'rotated_at',
         )
 
 

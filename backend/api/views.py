@@ -3,6 +3,7 @@ from django.db import transaction
 from django.db.models import Count
 from django.shortcuts import get_object_or_404
 from rest_framework import generics, mixins, status, viewsets
+from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated, IsAuthenticatedOrReadOnly
@@ -12,11 +13,14 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.views import TokenBlacklistView, TokenObtainPairView, TokenRefreshView
 
 from .auth_helpers import bind_authenticated_user
-from .models import ChatMessage, Follow, Topic, Video, VideoReaction
+from .models import AccountStreamKey, ChatMessage, Follow, StreamSession, Topic, Video, VideoReaction
 from .permissions import IsOwnerOrReadOnly
 from .serializers import (
+    AccountStreamKeyRotateResponseSerializer,
+    AccountStreamKeySerializer,
     ChatMessageReadSerializer,
     ChatMessageWriteSerializer,
+    StreamSessionReadSerializer,
     TopicSerializer,
     UserFollowStateSerializer,
     UserProfileSerializer,
@@ -29,6 +33,7 @@ from .serializers import (
     VideoReactionWriteSerializer,
     VideoWriteSerializer,
 )
+from .streaming import LiveSessionConflict, create_stream_session, end_stream_session, rotate_account_stream_key
 from .throttles import (
     LoginRateThrottle,
     MessageWriteRateThrottle,
@@ -340,6 +345,87 @@ class VideoMessageCollectionView(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         video = get_object_or_404(Video, id=self.kwargs['id'])
         return bind_authenticated_user(serializer, user=self.request.user, video=video)
+
+
+class VideoStreamSessionView(generics.GenericAPIView):
+    permission_classes = [IsAuthenticatedOrReadOnly]
+    serializer_class = StreamSessionReadSerializer
+
+    def get_video(self):
+        return get_object_or_404(Video.objects.select_related('user'), id=self.kwargs['id'])
+
+    def get_stream_session(self):
+        stream_session = StreamSession.objects.select_related('user', 'video').filter(
+            video_id=self.kwargs['id'],
+            is_live=True,
+        ).first()
+        if stream_session is None:
+            raise NotFound('No active stream session was found for this video.')
+        return stream_session
+
+    def _assert_video_owner(self, video):
+        if not self.request.user.is_authenticated:
+            self.permission_denied(self.request)
+        if video.user_id != self.request.user.id:
+            raise PermissionDenied('Only the owner of this video may manage its live session.')
+
+    def get(self, request, *args, **kwargs):
+        serializer = self.get_serializer(self.get_stream_session())
+        return Response(serializer.data)
+
+    def post(self, request, *args, **kwargs):
+        video = self.get_video()
+        self._assert_video_owner(video)
+
+        try:
+            stream_session = create_stream_session(user=request.user, video=video)
+        except LiveSessionConflict as exc:
+            return Response(
+                {'errors': {'detail': [str(exc)]}},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        serializer = self.get_serializer(stream_session)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    def delete(self, request, *args, **kwargs):
+        video = self.get_video()
+        self._assert_video_owner(video)
+
+        stream_session = StreamSession.objects.filter(video=video, is_live=True).first()
+        if stream_session is not None:
+            end_stream_session(stream_session=stream_session)
+
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class AccountStreamKeyView(generics.GenericAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = AccountStreamKeySerializer
+
+    def get(self, request, *args, **kwargs):
+        account_stream_key = AccountStreamKey.objects.filter(user=request.user).first()
+        if account_stream_key is None:
+            raise NotFound('No account stream key has been rotated for this user yet.')
+
+        serializer = self.get_serializer(account_stream_key)
+        return Response(serializer.data)
+
+
+class AccountStreamKeyRotateView(generics.GenericAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = AccountStreamKeyRotateResponseSerializer
+
+    def post(self, request, *args, **kwargs):
+        account_stream_key, plaintext_key = rotate_account_stream_key(user=request.user)
+        serializer = self.get_serializer(
+            {
+                'stream_key': plaintext_key,
+                'stream_key_last4': account_stream_key.stream_key_last4,
+                'rotated_at': account_stream_key.rotated_at,
+            }
+        )
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):

@@ -21,6 +21,6 @@ from main.settings import MEDIA_URL, MEDIA_ROOT
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/<str:version>/', include(('api.urls', 'api'), namespace='api')),
-    path('rtmp/', include('rtmp.urls'))
+    path('rtmp/internal/', include('rtmp.urls'))
 ]
 urlpatterns += static(MEDIA_URL, document_root=MEDIA_ROOT)

@@ -3,8 +3,8 @@ from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from rest_framework.exceptions import NotAuthenticated, Throttled, ValidationError
 
 from api.auth_helpers import create_chat_message, ensure_authenticated_user
-from api.models import Video
 from api.serializers import ChatMessageReadSerializer
+from api.streaming import get_active_stream_session
 from api.throttles import WebsocketMessageRateThrottle, WebsocketThrottleRequest
 
 class LiveChatConsumer(AsyncJsonWebsocketConsumer):
@@ -16,7 +16,7 @@ class LiveChatConsumer(AsyncJsonWebsocketConsumer):
             await self.close(code=4401)
             return
 
-        if not await self.video_exists():
+        if not await self.has_active_stream_session():
             await self.close(code=4404)
             return
 
@@ -56,16 +56,18 @@ class LiveChatConsumer(AsyncJsonWebsocketConsumer):
         await self.send_json(event['message'])
 
     @database_sync_to_async
-    def video_exists(self):
-        return Video.objects.filter(id=self.video_id).exists()
+    def has_active_stream_session(self):
+        return get_active_stream_session(video_id=self.video_id) is not None
 
     @database_sync_to_async
     def create_message_payload(self, content):
         user = ensure_authenticated_user(self.scope.get('user'))
-        video = Video.objects.filter(id=self.video_id).first()
+        stream_session = get_active_stream_session(video_id=self.video_id)
 
-        if video is None:
-            raise ValidationError({'video': ['Video not found.']})
+        if stream_session is None:
+            raise ValidationError({'video': ['Live session not found.']})
+
+        video = stream_session.video
 
         throttle = WebsocketMessageRateThrottle()
         throttle_request = WebsocketThrottleRequest(user=user, video_id=video.id)
