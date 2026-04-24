@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 
 from .models import ChatMessage, Follow, StreamSession, Topic, Video, VideoReaction
@@ -33,6 +34,14 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             'email': {'required': True},
         }
 
+    def validate_password(self, value):
+        user = User(
+            username=self.initial_data.get('username', ''),
+            email=self.initial_data.get('email', ''),
+        )
+        validate_password(value, user=user)
+        return value
+
     def create(self, validated_data):
         return User.objects.create_user(**validated_data)
 
@@ -57,6 +66,16 @@ class UserProfileSerializer(serializers.ModelSerializer):
         )
 
 
+class UserProfileWriteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = (
+            'display_name',
+            'bio',
+            'avatar_url',
+        )
+
+
 class TopicSerializer(serializers.ModelSerializer):
     class Meta:
         model = Topic
@@ -73,16 +92,29 @@ class TopicSerializer(serializers.ModelSerializer):
         return cleaned_value
 
 
-class VideoSerializer(serializers.ModelSerializer):
+class VideoListSerializer(serializers.ModelSerializer):
     user = UserSummarySerializer(read_only=True)
     topics = TopicSerializer(many=True, read_only=True)
-    topic_ids = serializers.PrimaryKeyRelatedField(
-        source='topics',
-        many=True,
-        queryset=Topic.objects.all(),
-        required=False,
-        write_only=True,
-    )
+
+    class Meta:
+        model = Video
+        fields = (
+            'id',
+            'user',
+            'name',
+            'views',
+            'like_count',
+            'dislike_count',
+            'topics',
+            'thumbnail',
+            'created',
+        )
+        read_only_fields = fields
+
+
+class VideoDetailSerializer(serializers.ModelSerializer):
+    user = UserSummarySerializer(read_only=True)
+    topics = TopicSerializer(many=True, read_only=True)
 
     class Meta:
         model = Video
@@ -95,17 +127,27 @@ class VideoSerializer(serializers.ModelSerializer):
             'like_count',
             'dislike_count',
             'topics',
-            'topic_ids',
             'thumbnail',
             'created',
         )
-        read_only_fields = (
-            'id',
-            'user',
-            'views',
-            'like_count',
-            'dislike_count',
-            'created',
+        read_only_fields = fields
+
+
+class VideoWriteSerializer(serializers.ModelSerializer):
+    topic_ids = serializers.PrimaryKeyRelatedField(
+        source='topics',
+        many=True,
+        queryset=Topic.objects.all(),
+        required=False,
+    )
+
+    class Meta:
+        model = Video
+        fields = (
+            'name',
+            'description',
+            'topic_ids',
+            'thumbnail',
         )
 
     def validate_name(self, value):
@@ -115,51 +157,20 @@ class VideoSerializer(serializers.ModelSerializer):
         return cleaned_value
 
 
-class FollowSerializer(serializers.ModelSerializer):
-    follower = UserSummarySerializer(read_only=True)
-    following = serializers.SlugRelatedField(
-        slug_field='username',
-        queryset=User.objects.all(),
+class UserFollowStateSerializer(serializers.Serializer):
+    is_following = serializers.BooleanField(read_only=True)
+
+
+class VideoReactionStateSerializer(serializers.Serializer):
+    reaction = serializers.ChoiceField(
+        choices=(('like', 'like'), ('dislike', 'dislike')),
+        allow_null=True,
+        required=False,
     )
 
-    class Meta:
-        model = Follow
-        fields = (
-            'id',
-            'follower',
-            'following',
-            'created_at',
-        )
-        read_only_fields = (
-            'id',
-            'follower',
-            'created_at',
-        )
 
-    def validate_following(self, value):
-        request = self.context.get('request')
-        if request and request.user.is_authenticated and value == request.user:
-            raise serializers.ValidationError('Users may not follow themselves.')
-        return value
-
-
-class VideoReactionSerializer(serializers.ModelSerializer):
-    user = UserSummarySerializer(read_only=True)
-
-    class Meta:
-        model = VideoReaction
-        fields = (
-            'id',
-            'user',
-            'video',
-            'reaction',
-            'created_at',
-        )
-        read_only_fields = (
-            'id',
-            'user',
-            'created_at',
-        )
+class VideoReactionWriteSerializer(serializers.Serializer):
+    reaction = serializers.ChoiceField(choices=(('like', 'like'), ('dislike', 'dislike')))
 
 
 class StreamSessionSerializer(serializers.ModelSerializer):
@@ -182,23 +193,24 @@ class StreamSessionSerializer(serializers.ModelSerializer):
         )
 
 
-class ChatMessageSerializer(serializers.ModelSerializer):
+class ChatMessageReadSerializer(serializers.ModelSerializer):
     user = UserSummarySerializer(read_only=True)
 
     class Meta:
         model = ChatMessage
         fields = (
             'id',
-            'video',
             'user',
             'message',
             'created_at',
         )
-        read_only_fields = (
-            'id',
-            'user',
-            'created_at',
-        )
+        read_only_fields = fields
+
+
+class ChatMessageWriteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ChatMessage
+        fields = ('message',)
 
     def validate_message(self, value):
         cleaned_value = value.strip()

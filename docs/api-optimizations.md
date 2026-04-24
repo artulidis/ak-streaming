@@ -209,3 +209,149 @@ Date: 2026-04-21
 	- `POST /api/v1/videos/` without a token returned `401`.
 	- The paginated response included `count`, `next`, `previous`, and `results`.
 - Note: the unauthenticated write returned `401` rather than `403` because `JWTAuthentication` issues an authentication challenge. The write is still correctly blocked by the global `IsAuthenticatedOrReadOnly` policy.
+
+## Phase 5 - V1 Contract Finalization, Migration Repair, and Runtime Validation
+
+Date: 2026-04-23
+
+### Exact changes made
+
+1. Expanded the DRF settings in [backend/main/settings.py](c:/Users/artul/OneDrive/Desktop/Projects/WebStream/backend/main/settings.py) to add `DEFAULT_VERSIONING_CLASS = 'rest_framework.versioning.URLPathVersioning'`, `DEFAULT_VERSION = 'v1'`, and `ALLOWED_VERSIONS = ('v1',)`.
+2. Updated [backend/main/urls.py](c:/Users/artul/OneDrive/Desktop/Projects/WebStream/backend/main/urls.py) so the API include point is version-parameterized as `api/<str:version>/` rather than a hardcoded `api/v1/` string.
+3. Split the user serializer contract in [backend/api/serializers.py](c:/Users/artul/OneDrive/Desktop/Projects/WebStream/backend/api/serializers.py) by adding `UserProfileWriteSerializer`, and updated [backend/api/views.py](c:/Users/artul/OneDrive/Desktop/Projects/WebStream/backend/api/views.py) so user registration and owner profile updates respond with the canonical `UserProfileSerializer` shape.
+4. Split the video serializer contract in [backend/api/serializers.py](c:/Users/artul/OneDrive/Desktop/Projects/WebStream/backend/api/serializers.py) into `VideoListSerializer`, `VideoDetailSerializer`, and `VideoWriteSerializer`.
+5. Updated [backend/api/views.py](c:/Users/artul/OneDrive/Desktop/Projects/WebStream/backend/api/views.py) so `VideoViewSet` selects serializers by action, returns detail payloads after create or update, and supports canonical collection filtering through `?user={username}` and `?topic={id}` query parameters.
+6. Removed the nested `users/<username>/videos/` route from [backend/api/urls.py](c:/Users/artul/OneDrive/Desktop/Projects/WebStream/backend/api/urls.py), making the filtered top-level `videos/` collection the only supported video listing surface in V1.
+7. Removed topic creation from public V1 by changing `TopicViewSet` in [backend/api/views.py](c:/Users/artul/OneDrive/Desktop/Projects/WebStream/backend/api/views.py) to a read-only list and retrieve viewset.
+8. Replaced the old follow-edge write contract with an explicit singleton follow-state contract by removing the writable follow serializer path, adding `UserFollowStateSerializer` in [backend/api/serializers.py](c:/Users/artul/OneDrive/Desktop/Projects/WebStream/backend/api/serializers.py), and adding `UserFollowStateView` plus the `users/<username>/follow/` route in [backend/api/views.py](c:/Users/artul/OneDrive/Desktop/Projects/WebStream/backend/api/views.py) and [backend/api/urls.py](c:/Users/artul/OneDrive/Desktop/Projects/WebStream/backend/api/urls.py).
+9. Converted follower and following list endpoints in [backend/api/views.py](c:/Users/artul/OneDrive/Desktop/Projects/WebStream/backend/api/views.py) to return paginated `UserSummarySerializer` records instead of follow-edge objects, so the collection payload reflects the actual public resource.
+10. Replaced the old collection-shaped reaction contract with a singleton reaction-state contract by adding `VideoReactionStateSerializer` and `VideoReactionWriteSerializer` in [backend/api/serializers.py](c:/Users/artul/OneDrive/Desktop/Projects/WebStream/backend/api/serializers.py), changing the route to `videos/<id>/reaction/` in [backend/api/urls.py](c:/Users/artul/OneDrive/Desktop/Projects/WebStream/backend/api/urls.py), and updating [backend/api/views.py](c:/Users/artul/OneDrive/Desktop/Projects/WebStream/backend/api/views.py) so the subresource returns only `reaction` as `like`, `dislike`, or `null`.
+11. Split the message serializer contract in [backend/api/serializers.py](c:/Users/artul/OneDrive/Desktop/Projects/WebStream/backend/api/serializers.py) into `ChatMessageReadSerializer` and `ChatMessageWriteSerializer`, and updated [backend/api/views.py](c:/Users/artul/OneDrive/Desktop/Projects/WebStream/backend/api/views.py) so message writes accept only `message`, path binding uses `videos/<id>/messages/`, and response payloads always use the read serializer.
+12. Renamed the token refresh endpoint in [backend/api/urls.py](c:/Users/artul/OneDrive/Desktop/Projects/WebStream/backend/api/urls.py) from `tokens/refreshes/` to `tokens/refresh/`.
+13. Updated `CustomTokenObtainPairSerializer` in [backend/api/views.py](c:/Users/artul/OneDrive/Desktop/Projects/WebStream/backend/api/views.py) so `POST /api/v1/tokens/` returns a stable `user` summary alongside `access` and `refresh`.
+14. Added [docs/api-multiphase-plan.md](c:/Users/artul/OneDrive/Desktop/Projects/WebStream/docs/api-multiphase-plan.md) to capture the larger redesign sequence and added [docs/api-v1-contract.md](c:/Users/artul/OneDrive/Desktop/Projects/WebStream/docs/api-v1-contract.md) to freeze the V1 response shapes, list envelopes, write contracts, and removed legacy routes.
+15. Replaced the stale legacy schema in [backend/api/migrations/0001_initial.py](c:/Users/artul/OneDrive/Desktop/Projects/WebStream/backend/api/migrations/0001_initial.py) with a Django-generated initial migration that matches the current `User`, `Follow`, `Topic`, `Video`, `VideoReaction`, `StreamSession`, and `ChatMessage` models.
+16. Updated [backend/requirements.txt](c:/Users/artul/OneDrive/Desktop/Projects/WebStream/backend/requirements.txt) so the PostgreSQL and image dependencies use Python 3.13-compatible versions: `psycopg[binary]==3.2.12` and `Pillow==11.2.1`.
+17. Installed the missing local runtime packages in the workspace environment for validation, including `psycopg[binary]==3.2.12`, `celery==5.2.7`, and `Pillow==11.2.1`, so `manage.py check` could run successfully under the current project settings.
+
+### Why each change was made
+
+1. URL-path versioning should be a DRF concept, not only a string in the URLConf. Adding versioning settings makes `request.version` available and formalizes the V1 boundary.
+2. A version-parameterized include point lets the router and settings cooperate on versioning instead of treating `v1` as a hardcoded path fragment.
+3. Public read payloads and owner write payloads should not share one serializer when their concerns differ materially. Splitting them prevents write-only assumptions from leaking into the public resource contract.
+4. The video surface had drifted into one serializer handling list, detail, and write semantics simultaneously. Separating those concerns makes payload size and write intent explicit.
+5. A design-first V1 should expose one canonical collection with filters instead of multiple overlapping collection shapes. Moving user and topic scoping into query parameters makes the top-level collection authoritative.
+6. Keeping both `users/<username>/videos/` and `videos/?user={username}` would preserve duplicate discovery surfaces in the contract. Removing the nested route makes the V1 video collection unambiguous.
+7. Topics currently have no ownership or moderation boundary, so allowing arbitrary public writes would create a contract the rest of the system is not ready to govern. Making topics read-only in V1 is the safer and cleaner baseline.
+8. Following another user is singleton state from the caller's perspective, not creation within somebody else's follower collection. The dedicated `/follow/` route fixes that semantic mismatch and restores idempotent `PUT` or `DELETE` behavior.
+9. Follower and following endpoints are public collections of users, so returning follow-edge records was exposing internal relationship structure instead of the actual resource clients need.
+10. A caller can have at most one reaction state per video, so the old plural `reactions/` route and mixed response body were misleading. The new singular state contract matches the data model and keeps counts on the video resource where they belong.
+11. Messages belong to a video, and the server should own the parent binding. Splitting read and write serializers removes the need for view-layer payload rewriting and makes the nested write contract truthful.
+12. `tokens/refreshes/` was awkward naming and did not read like a resource-oriented V1 path. Renaming it to `tokens/refresh/` makes the auth surface more predictable.
+13. Returning only raw tokens forces clients to recover user identity indirectly from JWT internals. Adding a stable user summary makes the login response self-describing and more design-first.
+14. The implementation now has explicit contract and sequencing documents, which lowers ambiguity for future agents and makes the V1 break legible before phase 2 begins.
+15. SQLite-backed validation was blocked because the initial API migration still described the 2022 schema with deleted models and fields. Rewriting it to the current model set removes that structural drift and lets normal migration-based validation run again.
+16. The existing PostgreSQL and Pillow pins were too old for the workspace Python 3.13 interpreter, so they could not support real runtime validation in this environment. Updating the pins aligns the manifest with the runtime actually in use.
+17. The project imports RTMP and Celery-backed code during Django startup, so local validation depends on those packages being installed even though the current milestone does not modify streaming behavior itself.
+
+### How this contributes to optimizing the API layer
+
+- Finalizes a clean V1 contract where collections, singleton subresources, read payloads, and write payloads map cleanly to the underlying data model.
+- Makes the API more predictable for clients by standardizing route names, filtering strategy, response shapes, and token payloads.
+- Removes more view-layer payload mutation by pushing truth into serializers and canonical resource routes.
+- Establishes a documented contract baseline in `docs/` so future phases can harden security and performance without reopening basic response-shape questions.
+- Restores migration-backed SQLite validation and real `manage.py check` support in the workspace, which makes further API iteration safer.
+
+### Validation
+
+- `c:/Users/artul/OneDrive/Desktop/Projects/WebStream/.venv/Scripts/python.exe -m py_compile backend/api/views.py backend/api/serializers.py backend/api/urls.py backend/main/settings.py backend/main/urls.py backend/api/migrations/0001_initial.py`
+- Result: passed with no output.
+- `manage.py check` was executed successfully after installing compatible runtime dependencies and supplying `SECRET_KEY`, `POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD` in the shell.
+- Runtime verification was executed against a temporary in-memory SQLite database with the real `api` migration path enabled and a temporary URLConf that mounted `api/<str:version>/`.
+- Verified behavior:
+	- `GET /api/v1/videos/` returned `200`.
+	- `GET /api/v1/videos/?user=owner` returned `200` with the expected filtered count.
+	- `POST /api/v1/users/` returned `201` with the canonical user profile response shape.
+	- `POST /api/v1/tokens/` returned `200` with `access`, `refresh`, and `user`.
+	- `POST /api/v1/tokens/refresh/` returned `200`.
+	- `PUT` and `GET /api/v1/users/{username}/follow/` returned `200` with `{"is_following": true}`.
+	- `PUT` and `GET /api/v1/videos/{id}/reaction/` returned `200` with `{"reaction": "like"}`.
+	- `POST /api/v1/videos/{id}/messages/` returned `201`, and `GET /api/v1/videos/{id}/messages/` returned `200` with the expected message item shape.
+	- Legacy routes `videos/{id}/reactions/` and `tokens/refreshes/` returned `404`.
+
+## Phase 6 - Authentication and Authorization Hardening
+
+Date: 2026-04-23
+
+### Exact changes made
+
+1. Updated [backend/api/serializers.py](c:/Users/artul/OneDrive/Desktop/Projects/WebStream/backend/api/serializers.py) so `UserRegistrationSerializer` now runs Django `validate_password()` during registration and reports failures on the `password` field instead of allowing weak passwords through or returning only non-field validation errors.
+2. Added [backend/api/permissions.py](c:/Users/artul/OneDrive/Desktop/Projects/WebStream/backend/api/permissions.py) and moved `IsOwnerOrReadOnly` out of [backend/api/views.py](c:/Users/artul/OneDrive/Desktop/Projects/WebStream/backend/api/views.py) so owner checks live in a reusable permission module instead of being embedded in the view layer.
+3. Added [backend/api/auth_helpers.py](c:/Users/artul/OneDrive/Desktop/Projects/WebStream/backend/api/auth_helpers.py) with `ensure_authenticated_user()`, `bind_authenticated_user()`, and `create_chat_message()` so actor binding for user-owned writes is centralized instead of repeated inline.
+4. Updated [backend/api/views.py](c:/Users/artul/OneDrive/Desktop/Projects/WebStream/backend/api/views.py) so `VideoViewSet.perform_create()` and `VideoMessageCollectionView.perform_create()` now use the shared actor-binding helper, and `VideoMessageCollectionView` declares its permission behavior explicitly with `IsAuthenticatedOrReadOnly` instead of relying only on the global default.
+5. Added [backend/api/throttles.py](c:/Users/artul/OneDrive/Desktop/Projects/WebStream/backend/api/throttles.py) with targeted throttle classes for registration, login, token refresh, token revoke, reaction writes, REST message writes, and websocket message writes.
+6. Expanded [backend/main/settings.py](c:/Users/artul/OneDrive/Desktop/Projects/WebStream/backend/main/settings.py) to add `rest_framework_simplejwt.token_blacklist` to `INSTALLED_APPS` and define named throttle rates for the new auth, reaction, and message throttles.
+7. Updated [backend/api/views.py](c:/Users/artul/OneDrive/Desktop/Projects/WebStream/backend/api/views.py) so `UserViewSet.create()` is registration-throttled, `VideoReactionView` throttles only mutating requests, and `VideoMessageCollectionView` throttles only `POST` writes.
+8. Replaced the framework-only token refresh wiring with local auth views in [backend/api/views.py](c:/Users/artul/OneDrive/Desktop/Projects/WebStream/backend/api/views.py) by adding `CustomTokenRefreshView` and `TokenRevokeView`, each with explicit `AllowAny` permissions and endpoint-specific throttles.
+9. Updated [backend/api/urls.py](c:/Users/artul/OneDrive/Desktop/Projects/WebStream/backend/api/urls.py) so `tokens/refresh/` now uses the local refresh view and the API exposes a new `tokens/revoke/` endpoint for explicit refresh-token blacklisting.
+10. Added [backend/websocket/auth.py](c:/Users/artul/OneDrive/Desktop/Projects/WebStream/backend/websocket/auth.py) with JWT-aware Channels middleware that reads a `token` query parameter and resolves `scope.user` through SimpleJWT instead of trusting session-only auth.
+11. Updated [backend/main/asgi.py](c:/Users/artul/OneDrive/Desktop/Projects/WebStream/backend/main/asgi.py) so websocket routing now uses the JWT-aware middleware stack and removes the username parameter from the chat route, changing the path shape to `ws/videos/<id>/`.
+12. Rewrote [backend/websocket/consumers.py](c:/Users/artul/OneDrive/Desktop/Projects/WebStream/backend/websocket/consumers.py) to replace the stale `AsyncConsumer` implementation that referenced deleted models with an `AsyncJsonWebsocketConsumer` that:
+	- rejects unauthenticated connections,
+	- resolves the acting user from `scope.user`,
+	- validates message content through the shared chat-message creation helper,
+	- throttles websocket message sends, and
+	- broadcasts the canonical `ChatMessageReadSerializer` payload so websocket chat cannot impersonate another user through URL or payload data.
+13. Updated [frontend/src/pages/VideoPage.js](c:/Users/artul/OneDrive/Desktop/Projects/WebStream/frontend/src/pages/VideoPage.js) so the active websocket client now connects to `ws://127.0.0.1/ws/videos/<id>/?token=<access-token>`, removes the username from the path, stops sending spoofable `user` and `video` fields in chat payloads, and cleans up the socket in a `useEffect` teardown.
+14. Updated [backend/requirements.txt](c:/Users/artul/OneDrive/Desktop/Projects/WebStream/backend/requirements.txt) again to raise `redis` from `4.3.4` to `4.6.0` and `typing_extensions` from `4.3.0` to `4.12.2`, resolving the dependency conflicts that blocked container builds for the real Docker-backed backend environment.
+15. Executed `docker compose run --rm --build ... backend python manage.py migrate` against the compose-backed PostgreSQL service so the `token_blacklist` tables and the current API schema exist in the real database environment, not only in temporary SQLite validation runs.
+
+### Why each change was made
+
+1. Django password validators were already configured in settings, but registration bypassed them entirely. Enforcing them in the serializer closes that gap at the API boundary and keeps weak-password failures tied to the password input itself.
+2. Ownership checks were previously defined inside the view module, which made them harder to reuse and easier to duplicate. Moving them into a dedicated permission module makes the enforcement boundary clearer.
+3. Phase 2 requires authenticated identity to be the only actor source for writes. A shared helper prevents future view or consumer code from drifting back toward client-supplied actor fields.
+4. The REST message path already bound `request.user`, but it did so inline. Converting it to the shared helper makes the write contract explicit and aligns it with websocket message persistence.
+5. The project had no throttling at all. Dedicated throttle classes keep rate-limiting local to the sensitive write paths instead of introducing a broad global throttle that would change read behavior unnecessarily.
+6. `BLACKLIST_AFTER_ROTATION` and refresh rotation were already enabled in configuration, but they were incomplete without the SimpleJWT blacklist app and real throttle-rate configuration. Adding both turns those settings into working server behavior.
+7. Registration, reactions, and messages have very different abuse profiles. Per-endpoint throttles let the codebase tune those paths independently without over-throttling normal reads.
+8. Leaving refresh handling entirely in third-party view classes makes project-specific policy harder to evolve. Local view subclasses provide a stable place for throttles and future auth policy changes.
+9. Rotation-only blacklisting is not enough when clients need an explicit logout or token-revocation path. The revoke endpoint makes refresh-token invalidation an intentional API capability.
+10. The API layer uses JWT authentication, but websocket chat still depended on session middleware and a username in the URL. JWT-aware socket middleware closes that mismatch and makes the realtime path follow the same actor model as the HTTP API.
+11. Removing the username path segment is the concrete step that prevents route data from standing in for caller identity on websocket chat.
+12. The old consumer trusted deleted models and spoofable route data. Rewriting it against the current models and serializer contract closes the impersonation gap and keeps websocket message persistence aligned with the REST write path.
+13. Backend-only websocket hardening would have broken the active frontend client immediately. Updating the one live socket caller keeps the shipped client aligned with the new authenticated websocket contract.
+14. The real migration step surfaced dependency conflicts that the local virtualenv did not expose because the Docker backend image builds under Python 3.10 with a full resolver pass. Fixing those pins at the manifest level removes an environment-specific deployment blocker instead of working around it locally.
+15. Phase 2 required refresh-token blacklisting to exist in the actual Postgres environment. Running migrations against the compose database makes the blacklist support operational for the deployed stack rather than only validated in tests.
+
+### How this contributes to optimizing the API layer
+
+- Enforces password strength and authenticated actor binding at the serializer, permission, and consumer boundaries instead of depending on client honesty.
+- Turns JWT refresh rotation into a complete lifecycle with blacklist-backed revocation instead of a partially configured token policy.
+- Adds abuse resistance on the highest-risk write paths without changing list or detail read behavior.
+- Reduces duplicated auth logic by centralizing ownership checks and actor-bound writes in small reusable modules.
+- Brings the websocket chat path into the same security model as the REST API, which removes one of the largest remaining identity inconsistencies in the backend surface.
+- Keeps the real Docker-backed environment buildable and migratable, which is necessary for the hardened auth flow to exist outside local smoke tests.
+
+### Validation
+
+- `c:/Users/artul/OneDrive/Desktop/Projects/WebStream/.venv/Scripts/python.exe -m py_compile backend/api/serializers.py`
+- Result: passed with no output.
+- `c:/Users/artul/OneDrive/Desktop/Projects/WebStream/.venv/Scripts/python.exe -m py_compile backend/api/serializers.py backend/api/permissions.py backend/api/auth_helpers.py backend/api/throttles.py backend/api/views.py backend/api/urls.py backend/main/settings.py`
+- Result: passed with no output.
+- `c:/Users/artul/OneDrive/Desktop/Projects/WebStream/.venv/Scripts/python.exe -m py_compile backend/websocket/auth.py backend/main/asgi.py backend/websocket/consumers.py`
+- Result: passed with no output.
+- `manage.py check` was executed successfully after supplying `SECRET_KEY`, `POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD` in the shell.
+- Additional runtime verification was executed against a temporary file-backed SQLite database with the real migration path enabled and an in-memory Channels layer.
+- Verified behavior:
+	- `POST /api/v1/users/` rejected a weak password with `400` and a `password` validation error.
+	- `POST /api/v1/users/` accepted a strong password and returned `201`.
+	- `POST /api/v1/tokens/` returned `200` with `access`, `refresh`, and `user`.
+	- `POST /api/v1/tokens/refresh/` returned `200`, and reusing the old refresh token after rotation failed with `401`.
+	- `POST /api/v1/tokens/revoke/` returned `200`, and refreshing with the revoked token failed afterward.
+	- `PUT /api/v1/videos/{id}/reaction/` without credentials returned `401`, while the authenticated write returned `200` with `{"reaction": "like"}`.
+	- `POST /api/v1/videos/{id}/messages/` with an authenticated token returned `201` and persisted the authenticated user in the response payload.
+	- Websocket connect to `ws/videos/{id}/` without a JWT was rejected.
+	- Websocket connect to `ws/videos/{id}/?token=...` succeeded, and sending a payload with a spoofed `user` value still persisted and broadcast the authenticated user from the token.
+	- The active websocket client in `frontend/src/pages/VideoPage.js` was updated to use the new tokenized `ws/videos/{id}/` URL shape and no longer sends caller identity in the payload.
+	- `docker compose run --rm --build ... backend python manage.py migrate` completed successfully against the compose-backed PostgreSQL service and applied the `token_blacklist` migration set in the real database environment.
