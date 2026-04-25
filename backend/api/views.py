@@ -1,10 +1,7 @@
 from django.contrib.auth import get_user_model
-from django.db import transaction
-from django.db.models import Count
 from django.shortcuts import get_object_or_404
 from rest_framework import generics, mixins, status, viewsets
 from rest_framework.exceptions import NotFound, PermissionDenied
-from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated, IsAuthenticatedOrReadOnly
 from rest_framework.response import Response
@@ -15,6 +12,7 @@ from rest_framework_simplejwt.views import TokenBlacklistView, TokenObtainPairVi
 from .auth_helpers import bind_authenticated_user
 from .models import AccountStreamKey, ChatMessage, Follow, StreamSession, Topic, Video, VideoReaction
 from .permissions import IsOwnerOrReadOnly
+from .services import clear_video_reaction, create_follow, create_video_message, delete_follow, set_video_reaction
 from .serializers import (
     AccountStreamKeyRotateResponseSerializer,
     AccountStreamKeySerializer,
@@ -133,33 +131,16 @@ class UserFollowStateView(generics.GenericAPIView):
 
     def put(self, request, *args, **kwargs):
         target_user = self.get_target_user()
-
-        if target_user == request.user:
-            raise ValidationError({'is_following': 'Users may not follow themselves.'})
-
-        with transaction.atomic():
-            Follow.objects.get_or_create(follower=request.user, following=target_user)
-            self._sync_follow_counts(request.user.id, target_user.id)
+        create_follow(follower=request.user, following=target_user)
 
         serializer = self.get_serializer({'is_following': True})
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     def delete(self, request, *args, **kwargs):
         target_user = self.get_target_user()
-
-        with transaction.atomic():
-            Follow.objects.filter(follower=request.user, following=target_user).delete()
-            self._sync_follow_counts(request.user.id, target_user.id)
+        delete_follow(follower=request.user, following=target_user)
 
         return Response(status=status.HTTP_204_NO_CONTENT)
-
-    def _sync_follow_counts(self, follower_id, following_id):
-        User.objects.filter(id=follower_id).update(
-            following_count=Follow.objects.filter(follower_id=follower_id).count()
-        )
-        User.objects.filter(id=following_id).update(
-            followers_count=Follow.objects.filter(following_id=following_id).count()
-        )
 
 
 class TopicViewSet(
@@ -271,18 +252,7 @@ class VideoReactionView(generics.GenericAPIView):
 
     def delete(self, request, *args, **kwargs):
         video = self.get_video()
-
-        with transaction.atomic():
-            reaction = VideoReaction.objects.select_for_update().filter(
-                user=request.user,
-                video=video,
-            ).first()
-
-            if reaction is None:
-                return Response(status=status.HTTP_204_NO_CONTENT)
-
-            reaction.delete()
-            self._sync_reaction_counts(video.id)
+        clear_video_reaction(user=request.user, video=video)
 
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -292,28 +262,10 @@ class VideoReactionView(generics.GenericAPIView):
         serializer.is_valid(raise_exception=True)
         new_reaction = serializer.validated_data['reaction']
         new_model_reaction = self.api_to_model_reaction[new_reaction]
-
-        with transaction.atomic():
-            VideoReaction.objects.update_or_create(
-                user=request.user,
-                video=video,
-                defaults={'reaction': new_model_reaction},
-            )
-            self._sync_reaction_counts(video.id)
+        set_video_reaction(user=request.user, video=video, reaction=new_model_reaction)
 
         response_serializer = VideoReactionStateSerializer({'reaction': new_reaction})
         return Response(response_serializer.data, status=status.HTTP_200_OK)
-
-    def _sync_reaction_counts(self, video_id):
-        counts = {
-            row['reaction']: row['total']
-            for row in VideoReaction.objects.filter(video_id=video_id).values('reaction').annotate(total=Count('id'))
-        }
-
-        Video.objects.filter(id=video_id).update(
-            like_count=counts.get(VideoReaction.LIKE, 0),
-            dislike_count=counts.get(VideoReaction.DISLIKE, 0),
-        )
 
 
 class VideoMessageCollectionView(generics.ListCreateAPIView):
@@ -344,7 +296,11 @@ class VideoMessageCollectionView(generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         video = get_object_or_404(Video, id=self.kwargs['id'])
-        return bind_authenticated_user(serializer, user=self.request.user, video=video)
+        return create_video_message(
+            user=self.request.user,
+            message=serializer.validated_data['message'],
+            video_id=video.id,
+        )
 
 
 class VideoStreamSessionView(generics.GenericAPIView):

@@ -417,3 +417,45 @@ Date: 2026-04-24
 	- `POST /rtmp/internal/publish-auth/` with a valid `playback_id` plus valid reusable account stream key returned `204`, while the same route with invalid key material returned `403`.
 	- Websocket connect to `ws/videos/{id}/?token=...` succeeded while the target video had an active live session, and sending a payload still persisted and broadcast the authenticated websocket user.
 	- `DELETE /api/v1/videos/{id}/stream-session/` returned `204`, and websocket connect to the same `ws/videos/{id}/?token=...` route failed once the live session had ended.
+
+## Phase 8 - Write-Side Service Extraction for Follow, Reaction, and Message Flows
+
+Date: 2026-04-24
+
+### Exact changes made
+
+1. Added [backend/api/services.py](c:/Users/artul/OneDrive/Desktop/Projects/WebStream/backend/api/services.py) as a small module-level service layer that mirrors the function-oriented transaction pattern already used in [backend/api/streaming.py](c:/Users/artul/OneDrive/Desktop/Projects/WebStream/backend/api/streaming.py).
+2. Moved follow write-side behavior out of [backend/api/views.py](c:/Users/artul/OneDrive/Desktop/Projects/WebStream/backend/api/views.py) into `create_follow()` and `delete_follow()` service functions that own self-follow validation, transactional follow edge mutation, deterministic user-row locking, and denormalized follower and following counter synchronization.
+3. Moved reaction write-side behavior out of the same view module into `set_video_reaction()` and `clear_video_reaction()` service functions that own transactional reaction mutation, video-row locking, and denormalized `like_count` and `dislike_count` synchronization.
+4. Moved message creation out of [backend/api/auth_helpers.py](c:/Users/artul/OneDrive/Desktop/Projects/WebStream/backend/api/auth_helpers.py) into `create_video_message()` in the new service module, leaving `auth_helpers.py` with only authentication and serializer-binding utilities.
+5. Updated [backend/api/views.py](c:/Users/artul/OneDrive/Desktop/Projects/WebStream/backend/api/views.py) so `UserFollowStateView`, `VideoReactionView`, and `VideoMessageCollectionView` now delegate only their write paths to the service module while preserving their current routes, serializer selection, payload shapes, status codes, throttling, and permission behavior.
+6. Updated [backend/websocket/consumers.py](c:/Users/artul/OneDrive/Desktop/Projects/WebStream/backend/websocket/consumers.py) so websocket chat message writes now validate the incoming body with the existing write serializer and delegate persistence plus live-session enforcement to the shared `create_video_message()` service.
+7. Enforced one shared message-write rule across both transports: message creation now requires an active live stream session for the target video on both the REST endpoint and the websocket send path. The consumer still keeps connection-time live-session checks, but write-time enforcement now also happens through the shared service.
+
+### Why each change was made
+
+1. The write-side logic for follows, reactions, and chat messages had drifted into transport code. A small function-based service module is enough to centralize those invariants without introducing model managers or a larger abstraction layer.
+2. Follow counter synchronization was previously embedded in the view and vulnerable to concurrent stale recounts. Locking the affected user rows inside the service keeps the denormalized counters consistent while preserving the existing `PUT` and `DELETE` follow contract.
+3. Reaction counter synchronization was also view-owned and repeated the same recount pattern inline. Moving it into a service makes the mutation and counter update one transactional unit and keeps the view focused on request and response concerns.
+4. `auth_helpers.py` had started to accumulate chat persistence behavior that was no longer just authentication glue. Pulling message creation into the service layer restores a cleaner boundary between actor binding utilities and domain writes.
+5. The views should continue to own HTTP-level behavior such as serializer choice, throttles, permissions, and response payloads. Delegating only the write-side business rules keeps the refactor small and avoids changing the public API shape.
+6. The websocket consumer needed to share the same message persistence rule as REST without duplicating stream-session checks or message-write side effects. Reusing the service function makes write-time behavior match across both transports.
+7. REST previously allowed chat message creation without an active live session, while the websocket path required one. Unifying on the live-session requirement removes that domain inconsistency and makes message persistence depend on the same session invariant everywhere.
+
+### How this contributes to optimizing the API layer
+
+- Reduces duplicated business logic by moving follow, reaction, and message writes behind a small shared service surface.
+- Keeps denormalized follow and reaction counters synchronized inside explicit transactions instead of recomputing them ad hoc in transport code.
+- Makes the REST and websocket message flows share the same write-time live-session rule, which removes one of the remaining backend consistency gaps.
+- Leaves routes, serializers, throttles, permissions, and payload shapes intact, so the cleanup improves internal structure without expanding the public API contract.
+
+### Validation
+
+- IDE error validation reported no errors in the touched files: `backend/api/services.py`, `backend/api/views.py`, `backend/api/auth_helpers.py`, and `backend/websocket/consumers.py`.
+- Executed a temporary SQLite-backed Django validation harness that ran `migrate` and `check` with the real `api` migration path and an in-memory Channels layer.
+- `check` result: `System check identified no issues (0 silenced).`
+- Verified behavior in the same harness:
+	- `PUT`, `GET`, and `DELETE /api/v1/users/{username}/follow/` returned `200`, `200`, and `204`, and the denormalized follower and following counters changed to `1/1` after follow then back to `0/0` after unfollow.
+	- `PUT`, `GET`, and `DELETE /api/v1/videos/{id}/reaction/` returned `200`, `200`, and `204`, and the denormalized reaction counters changed to `like_count=1, dislike_count=0` after the write then back to `0/0` after clear.
+	- `POST /api/v1/videos/{id}/messages/` returned `201` while a live session existed and returned `400` with `{"video": ["Live session not found."]}` after the live session ended.
+	- Websocket connect to `ws/videos/{id}/?token=...` succeeded while the stream was live, persisted and broadcast the canonical message payload for a live send, and returned `{"errors": {"video": ["Live session not found."]}}` when a send was attempted after the stream session had ended.

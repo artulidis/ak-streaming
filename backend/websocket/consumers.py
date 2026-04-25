@@ -2,8 +2,9 @@ from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from rest_framework.exceptions import NotAuthenticated, Throttled, ValidationError
 
-from api.auth_helpers import create_chat_message, ensure_authenticated_user
-from api.serializers import ChatMessageReadSerializer
+from api.auth_helpers import ensure_authenticated_user
+from api.serializers import ChatMessageReadSerializer, ChatMessageWriteSerializer
+from api.services import create_video_message
 from api.streaming import get_active_stream_session
 from api.throttles import WebsocketMessageRateThrottle, WebsocketThrottleRequest
 
@@ -62,22 +63,21 @@ class LiveChatConsumer(AsyncJsonWebsocketConsumer):
     @database_sync_to_async
     def create_message_payload(self, content):
         user = ensure_authenticated_user(self.scope.get('user'))
-        stream_session = get_active_stream_session(video_id=self.video_id)
-
-        if stream_session is None:
-            raise ValidationError({'video': ['Live session not found.']})
-
-        video = stream_session.video
 
         throttle = WebsocketMessageRateThrottle()
-        throttle_request = WebsocketThrottleRequest(user=user, video_id=video.id)
+        throttle_request = WebsocketThrottleRequest(user=user, video_id=self.video_id)
 
         if not throttle.allow_request(throttle_request, None):
             raise Throttled(wait=throttle.wait())
 
-        message = create_chat_message(
+        serializer = ChatMessageWriteSerializer(
+            data={'message': content.get('body', '') if isinstance(content, dict) else ''}
+        )
+        serializer.is_valid(raise_exception=True)
+
+        message = create_video_message(
             user=user,
-            video=video,
-            message=content.get('body', '') if isinstance(content, dict) else '',
+            video_id=self.video_id,
+            message=serializer.validated_data['message'],
         )
         return ChatMessageReadSerializer(message).data
