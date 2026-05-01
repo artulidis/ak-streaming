@@ -1,6 +1,6 @@
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
-from rest_framework.exceptions import NotAuthenticated, Throttled, ValidationError
+from rest_framework.exceptions import NotAuthenticated, NotFound, Throttled, ValidationError
 
 from api.auth_helpers import ensure_authenticated_user
 from api.serializers import ChatMessageReadSerializer, ChatMessageWriteSerializer
@@ -33,6 +33,9 @@ class LiveChatConsumer(AsyncJsonWebsocketConsumer):
             message_payload = await self.create_message_payload(content)
         except NotAuthenticated:
             await self.close(code=4401)
+            return
+        except NotFound as exc:
+            await self.send_json({'detail': str(exc.detail)})
             return
         except ValidationError as exc:
             await self.send_json({'errors': exc.detail})

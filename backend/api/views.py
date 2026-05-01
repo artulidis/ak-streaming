@@ -2,7 +2,7 @@ from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
 from rest_framework import generics, mixins, status, viewsets
 from rest_framework.exceptions import NotFound, PermissionDenied
-from rest_framework.parsers import FormParser, MultiPartParser
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated, IsAuthenticatedOrReadOnly
 from rest_framework.response import Response
 
@@ -52,6 +52,7 @@ class UserViewSet(
     mixins.DestroyModelMixin,
     viewsets.GenericViewSet,
 ):
+    parser_classes = [JSONParser, MultiPartParser, FormParser]
     queryset = User.objects.all().order_by('username')
     lookup_field = 'username'
 
@@ -95,18 +96,26 @@ class UserViewSet(
 class UserFollowerCollectionView(generics.ListAPIView):
     serializer_class = UserSummarySerializer
 
+    def get_target_user(self):
+        return get_object_or_404(User.objects.only('id'), username=self.kwargs['username'])
+
     def get_queryset(self):
+        target_user = self.get_target_user()
         return User.objects.filter(
-            following_edges__following__username=self.kwargs['username']
+            following_edges__following_id=target_user.id
         ).order_by('-following_edges__created_at')
 
 
 class UserFollowingCollectionView(generics.ListAPIView):
     serializer_class = UserSummarySerializer
 
+    def get_target_user(self):
+        return get_object_or_404(User.objects.only('id'), username=self.kwargs['username'])
+
     def get_queryset(self):
+        target_user = self.get_target_user()
         return User.objects.filter(
-            follower_edges__follower__username=self.kwargs['username']
+            follower_edges__follower_id=target_user.id
         ).order_by('-follower_edges__created_at')
 
 
@@ -177,13 +186,13 @@ class VideoViewSet(
     def get_queryset(self):
         queryset = Video.objects.select_related('user').prefetch_related('topics').order_by('-created')
         username = self.request.query_params.get('user')
-        topic_id = self.request.query_params.get('topic')
+        topic_name = self.request.query_params.get('topic_name')
 
         if username:
             queryset = queryset.filter(user__username=username)
 
-        if topic_id:
-            queryset = queryset.filter(topics__id=topic_id).distinct()
+        if topic_name:
+            queryset = queryset.filter(topics__name=topic_name).distinct()
 
         return queryset
 
@@ -271,6 +280,9 @@ class VideoReactionView(generics.GenericAPIView):
 class VideoMessageCollectionView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticatedOrReadOnly]
 
+    def get_video(self):
+        return get_object_or_404(Video.objects.only('id'), id=self.kwargs['id'])
+
     def get_serializer_class(self):
         if self.request.method == 'POST':
             return ChatMessageWriteSerializer
@@ -282,8 +294,9 @@ class VideoMessageCollectionView(generics.ListCreateAPIView):
         return super().get_throttles()
 
     def get_queryset(self):
+        video = self.get_video()
         return ChatMessage.objects.select_related('user').filter(
-            video_id=self.kwargs['id']
+            video_id=video.id
         ).order_by('-created_at')
 
     def create(self, request, *args, **kwargs):
@@ -295,7 +308,7 @@ class VideoMessageCollectionView(generics.ListCreateAPIView):
         return Response(response_serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
     def perform_create(self, serializer):
-        video = get_object_or_404(Video, id=self.kwargs['id'])
+        video = self.get_video()
         return create_video_message(
             user=self.request.user,
             message=serializer.validated_data['message'],
@@ -336,10 +349,7 @@ class VideoStreamSessionView(generics.GenericAPIView):
         try:
             stream_session = create_stream_session(user=request.user, video=video)
         except LiveSessionConflict as exc:
-            return Response(
-                {'errors': {'detail': [str(exc)]}},
-                status=status.HTTP_409_CONFLICT,
-            )
+            return Response({'detail': str(exc)}, status=status.HTTP_409_CONFLICT)
 
         serializer = self.get_serializer(stream_session)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -387,7 +397,7 @@ class AccountStreamKeyRotateView(generics.GenericAPIView):
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
         data = super().validate(attrs)
-        data['user'] = UserSummarySerializer(self.user).data
+        data['user'] = UserSummarySerializer(self.user, context=self.context).data
         return data
 
     @classmethod

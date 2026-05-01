@@ -2,12 +2,14 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 
-from .models import AccountStreamKey, ChatMessage, Follow, StreamSession, Topic, Video, VideoReaction
+from .models import AccountStreamKey, ChatMessage, StreamSession, Topic, Video
 
 User = get_user_model()
 
 
 class UserSummarySerializer(serializers.ModelSerializer):
+    avatar_url = serializers.SerializerMethodField()
+
     class Meta:
         model = User
         fields = (
@@ -18,6 +20,19 @@ class UserSummarySerializer(serializers.ModelSerializer):
         )
         read_only_fields = fields
 
+    def get_avatar_url(self, obj):
+        if not obj.avatar:
+            return ''
+        return self._build_media_url(obj.avatar.url)
+
+    def _build_media_url(self, path):
+        if not path:
+            return ''
+        request = self.context.get('request')
+        if request is None:
+            return path
+        return request.build_absolute_uri(path)
+
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
     class Meta:
@@ -25,19 +40,16 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         fields = (
             'id',
             'username',
-            'email',
             'password',
         )
         read_only_fields = ('id',)
         extra_kwargs = {
             'password': {'write_only': True, 'trim_whitespace': False},
-            'email': {'required': True},
         }
 
     def validate_password(self, value):
         user = User(
             username=self.initial_data.get('username', ''),
-            email=self.initial_data.get('email', ''),
         )
         validate_password(value, user=user)
         return value
@@ -47,6 +59,8 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
 
 
 class UserProfileSerializer(serializers.ModelSerializer):
+    avatar_url = serializers.SerializerMethodField()
+
     class Meta:
         model = User
         fields = (
@@ -65,6 +79,9 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'following_count',
         )
 
+    def get_avatar_url(self, obj):
+        return UserSummarySerializer(context=self.context).get_avatar_url(obj)
+
 
 class UserProfileWriteSerializer(serializers.ModelSerializer):
     class Meta:
@@ -72,7 +89,7 @@ class UserProfileWriteSerializer(serializers.ModelSerializer):
         fields = (
             'display_name',
             'bio',
-            'avatar_url',
+            'avatar',
         )
 
 
@@ -83,7 +100,7 @@ class TopicSerializer(serializers.ModelSerializer):
             'id',
             'name',
         )
-        read_only_fields = ('id',)
+        read_only_fields = fields
 
     def validate_name(self, value):
         cleaned_value = value.strip()
@@ -134,9 +151,10 @@ class VideoDetailSerializer(serializers.ModelSerializer):
 
 
 class VideoWriteSerializer(serializers.ModelSerializer):
-    topic_ids = serializers.PrimaryKeyRelatedField(
+    topic_names = serializers.SlugRelatedField(
         source='topics',
         many=True,
+        slug_field='name',
         queryset=Topic.objects.all(),
         required=False,
     )
@@ -146,7 +164,7 @@ class VideoWriteSerializer(serializers.ModelSerializer):
         fields = (
             'name',
             'description',
-            'topic_ids',
+            'topic_names',
             'thumbnail',
         )
 
@@ -191,17 +209,7 @@ class StreamSessionReadSerializer(serializers.ModelSerializer):
             'hls_url',
             'recording_url',
         )
-        read_only_fields = (
-            'id',
-            'user',
-            'video',
-            'playback_id',
-            'is_live',
-            'started_at',
-            'ended_at',
-            'hls_url',
-            'recording_url',
-        )
+        read_only_fields = fields
 
     def get_hls_url(self, obj):
         return self._build_stream_url(f'/stream/hls/{obj.playback_id}.m3u8')

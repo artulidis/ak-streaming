@@ -8,7 +8,7 @@ class User(AbstractUser):
     username = models.CharField(max_length=20, unique=True)
     display_name = models.CharField(max_length=80, blank=True)
     bio = models.TextField(max_length=256, blank=True)
-    avatar_url = models.URLField(max_length=500, blank=True)
+    avatar = models.ImageField(upload_to='avatars/', blank=True)
     followers_count = models.PositiveIntegerField(default=0)
     following_count = models.PositiveIntegerField(default=0)
 
@@ -42,26 +42,14 @@ class Video(models.Model):
             Index(fields=['-created']),
         ]
 
-    user = models.ForeignKey(
-        User,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='videos',
-    )
-
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='videos')
     name = models.CharField(max_length=100)
     description = models.TextField(max_length=1000, blank=True)
-
-    # Denormalized counters
     views = models.PositiveIntegerField(default=0)
     like_count = models.PositiveIntegerField(default=0)
     dislike_count = models.PositiveIntegerField(default=0)
-
     topics = models.ManyToManyField(Topic, related_name='videos', blank=True)
-
     thumbnail = models.ImageField(upload_to='thumbnails/', blank=True)
-
     created = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -119,10 +107,8 @@ class StreamSession(models.Model):
 
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     video = models.ForeignKey(Video, on_delete=models.CASCADE)
-
     playback_id = models.CharField(max_length=255, unique=True)
     is_live = models.BooleanField(default=True)
-
     started_at = models.DateTimeField(auto_now_add=True)
     ended_at = models.DateTimeField(blank=True, null=True)
 
@@ -135,7 +121,6 @@ class ChatMessage(models.Model):
 
     video = models.ForeignKey(Video, on_delete=models.CASCADE)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
-
     message = models.TextField(max_length=1000)
     created_at = models.DateTimeField(auto_now_add=True)
 

@@ -55,8 +55,9 @@ This document freezes the response-shape decisions for the current V1 API layer 
 }
 ```
 
-- User writes accept only `display_name`, `bio`, and `avatar_url`.
-- User registration writes accept only `username`, `email`, and `password`.
+- User writes accept only `display_name`, `bio`, and `avatar`.
+- User read serializers expose `avatar_url` as the resolved file URL for the stored avatar image.
+- User registration writes accept only `username` and `password`.
 
 ### Topic
 
@@ -87,7 +88,7 @@ This document freezes the response-shape decisions for the current V1 API layer 
 }
 ```
 
-- The canonical video collection supports query filters such as `?user={username}` and `?topic={id}`.
+- The canonical video collection supports query filters such as `?user={username}` and `?topic_name={name}`.
 
 ### Video Detail
 
@@ -108,7 +109,7 @@ This document freezes the response-shape decisions for the current V1 API layer 
 }
 ```
 
-- Video writes accept only `name`, `description`, `topic_ids`, and `thumbnail`.
+- Video writes accept only `name`, `description`, `topic_names`, and `thumbnail`.
 
 ### Follow State
 

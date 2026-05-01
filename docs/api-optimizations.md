@@ -459,3 +459,48 @@ Date: 2026-04-24
 	- `PUT`, `GET`, and `DELETE /api/v1/videos/{id}/reaction/` returned `200`, `200`, and `204`, and the denormalized reaction counters changed to `like_count=1, dislike_count=0` after the write then back to `0/0` after clear.
 	- `POST /api/v1/videos/{id}/messages/` returned `201` while a live session existed and returned `400` with `{"video": ["Live session not found."]}` after the live session ended.
 	- Websocket connect to `ws/videos/{id}/?token=...` succeeded while the stream was live, persisted and broadcast the canonical message payload for a live send, and returned `{"errors": {"video": ["Live session not found."]}}` when a send was attempted after the stream session had ended.
+
+## Phase 9 - Counter Hot-Path Delta Updates and Nested Error Contract Cleanup
+
+Date: 2026-04-26
+
+### Exact changes made
+
+1. Updated [backend/api/services.py](c:/Users/artul/OneDrive/Desktop/Projects/WebStream/backend/api/services.py) so follow counter maintenance no longer recomputes totals with `count()` on every `create_follow()` and `delete_follow()` call.
+2. Replaced that recount logic with atomic `F()`-expression delta updates that increment counters only when a follow edge is newly created and decrement counters only when an existing edge is actually deleted.
+3. Updated the same service module so reaction counter maintenance no longer aggregates the full `VideoReaction` table on every `set_video_reaction()` and `clear_video_reaction()` write.
+4. Reworked reaction writes to lock the current reaction row, detect create, idempotent repeat, swap, and delete cases explicitly, and apply only the needed `like_count` and `dislike_count` deltas to the owning video.
+5. Changed the shared message write service in [backend/api/services.py](c:/Users/artul/OneDrive/Desktop/Projects/WebStream/backend/api/services.py) so a missing live session now raises `NotFound` with a DRF-standard `detail` payload instead of returning a field-keyed validation error for what is really a missing subresource.
+6. Updated [backend/api/views.py](c:/Users/artul/OneDrive/Desktop/Projects/WebStream/backend/api/views.py) so `UserFollowerCollectionView`, `UserFollowingCollectionView`, and `VideoMessageCollectionView` now resolve their parent resource before listing results, returning `404` when the parent user or video does not exist instead of returning an empty collection.
+7. Updated `VideoMessageCollectionView` in the same file to reuse that explicit parent-video lookup for both list and create flows so nested message reads and writes now agree on parent existence semantics.
+8. Normalized the stream-session conflict response in [backend/api/views.py](c:/Users/artul/OneDrive/Desktop/Projects/WebStream/backend/api/views.py) from a custom `errors` wrapper to the standard `{"detail": ...}` response body while keeping the existing `409 Conflict` status.
+9. Updated [backend/websocket/consumers.py](c:/Users/artul/OneDrive/Desktop/Projects/WebStream/backend/websocket/consumers.py) to catch the shared message-service `NotFound` path and return a plain `detail` payload instead of letting the websocket send path fall out of sync with the new shared service contract.
+
+### Why each change was made
+
+1. Follow and reaction writes were still paying O(n) recount costs inside the hottest mutation paths even after the write-side service extraction. Those were the clearest remaining performance problems in the API layer.
+2. Delta-based counter maintenance is enough for the current denormalized model and keeps the existing transaction boundaries intact, so it removes the unnecessary scans without forcing a larger redesign.
+3. The follow path needs idempotent semantics. Basing counter changes on whether a row was actually created or deleted prevents duplicate `PUT` or repeated `DELETE` requests from drifting the counters.
+4. Reaction writes have more than one state transition, so they cannot safely use a naive increment or decrement rule. Handling create, repeat, swap, and delete explicitly keeps the denormalized counts correct while avoiding full-table aggregation.
+5. `POST /videos/{id}/messages/` was treating the absence of an active live session as a generic validation failure even though the problem is that the nested live-session resource is not present. Returning `404` with `detail` makes that failure easier to reason about and aligns it with the rest of the API.
+6. Nested collections should not silently return an empty page when their parent resource does not exist. Validating the parent first makes follower, following, and message routes behave predictably alongside the other nested endpoints that already return `404`.
+7. The stream-session start conflict was the last obvious HTTP response in the API layer still using a one-off error envelope. Normalizing it removes special-case parsing for clients.
+8. The websocket consumer shares the message creation service, so it needed a small compatibility update to stay aligned with the service-layer `NotFound` contract after the REST-side cleanup.
+
+### How this contributes to optimizing the API layer
+
+- Removes repeated full-table counting and aggregation work from follow and reaction hot write paths, which lowers the steady-state cost of common social mutations.
+- Makes nested routes more truthful by distinguishing a missing parent resource from an empty child collection.
+- Reduces special-case client handling by tightening the remaining outlier error payloads toward DRF's default `detail` contract.
+- Preserves the public route surface and core payload shapes while improving predictability and write-path efficiency.
+
+### Validation
+
+- Executed a focused temporary SQLite-backed Django validation harness against the service layer and verified that follow and reaction counters now stay correct across create, idempotent repeat, swap, and delete flows without any recount helper.
+- Executed a request-level temporary SQLite-backed Django validation harness against the versioned API routes and verified:
+	- `GET /api/v1/users/missing/followers/` returned `404` with a `detail` payload.
+	- `GET /api/v1/users/missing/following/` returned `404` with a `detail` payload.
+	- `GET /api/v1/videos/999/messages/` returned `404` with a `detail` payload.
+	- `POST /api/v1/videos/{id}/messages/` returned `404` with `{"detail": "No active stream session was found for this video."}` when the target video was not live.
+	- `POST /api/v1/videos/{id}/stream-session/` still returned `201` on first create and now returned `409` with a `detail` payload on the duplicate create attempt.
+	- `POST /api/v1/videos/{id}/messages/` still returned `201` once a live session existed for the target video.
