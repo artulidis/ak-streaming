@@ -1,0 +1,17 @@
+# WebStream Vision
+
+WebStream is being reworked from an older full-stack streaming demo into a backend-focused engineering project that can support explanations of performance, scalability, and backend design tradeoffs.
+
+The long-term goal is to turn the repository into a system that simulates the behavior of a scalable streaming service under controlled load. The project is meant to be useful both as an engineering artifact and as a teaching tool: it should make it possible to explain why certain backend patterns, bottlenecks, and optimizations matter by observing their effect on a concrete system.
+
+The project vision has two major phases.
+
+The first phase is foundation work. Before serious redesign begins, the repository should be made agent-friendly and aligned with strong engineering practice. That includes improving version control workflow, local development ergonomics, and repo hygiene so iteration is fast and mistakes are easy to recover from. It also includes fixing the current data model, which is understood to be substantially flawed, and reshaping the REST API so serializers, URL structure, and views follow clearer REST and Django conventions. Once the model and API are in a durable state, the project should gain a meaningful test suite that supports long-term evolution without constant regression risk.
+
+The second phase is the actual reimagination of the product. At that point, the focus shifts from preserving the old full-stack app to building a streaming-service backend simulation environment. The system should explicitly model how clients interact with the platform, including authentication, session behavior, API usage patterns, stream initiation, live chat activity, feed generation, search, reactions, and social relationships such as follows. The current React frontend is expected to be replaced by a Python-based client simulation service that can generate these behaviors programmatically. That simulation layer should expose controls for traffic shape and volume so the backend can be measured under steady usage, spikes, and different concurrency patterns.
+
+Alongside the simulation layer, the project should include logging and measurement infrastructure that captures simulated client activity, interactions between backend services, request latency, and relevant resource consumption. With that baseline in place, the repository should support experiments that reveal real bottlenecks in the system. The intent is then to apply a small number of meaningful backend optimizations, on the order of two or three, and demonstrate measurable performance improvement rather than theoretical cleanup alone.
+
+The final stage of the vision is presentation and observability. After the backend simulation and optimization work exist, the project should grow a web interface that lets users drive the client simulation service and observe how the system behaves before and after optimizations. The interface should make backend tradeoffs legible, so users can see how different traffic patterns affect the system and how specific improvements change performance characteristics.
+
+In short, WebStream is intended to evolve from a conventional streaming demo into a backend systems project centered on simulation, measurement, optimization, and explanation. This document exists so new agents can understand that full direction without reconstructing it from prior conversations.

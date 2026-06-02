@@ -1,5 +1,11 @@
 # **AK Streaming Application**
 
+Current working docs for the foundation milestone:
+
+- [docs/vision.md](docs/vision.md)
+- [docs/current-milestone.md](docs/current-milestone.md)
+- [docs/development-workflow.md](docs/development-workflow.md)
+
 Part 1: Installation & Setup
 
 Part 2: Application Structure & Functionality

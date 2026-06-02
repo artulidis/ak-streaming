@@ -1,3 +1,47 @@
-# Ignore environment files
+# Environment files
 *.env
-node_modules
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+.Python
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+.nox/
+.tox/
+.hypothesis/
+venv/
+.venv/
+env/
+ENV/
+
+# Django and local media
+backend/media/
+
+# Node and frontend build artifacts
+node_modules/
+frontend/build/
+
+# Editor and OS files
+.idea/
+.vscode/
+Thumbs.db
+.DS_Store
+*.swp
+*.swo
+
+# Logs and local runtime state
+*.log
+data/
+logs/
+
+# Generated artifacts
+dist/
+build/

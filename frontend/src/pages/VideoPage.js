@@ -21,7 +21,7 @@ const VideoPage = () => {
   const [input, setInput] = useState('')
   const [isFollowing, setIsFollowing] = useState(false)
   const [videoUser, setVideoUser] = useState('')
-  const { user, thumbnail, following, setFollowing, ffmpegCommand } = useContext(GlobalContext)
+  const { user, authTokens, thumbnail, following, setFollowing, ffmpegCommand } = useContext(GlobalContext)
   const [isLiked, setIsLiked] = useState('none')
 
   const [streamUrl, setStreamUrl] = useState(null)
@@ -30,63 +30,79 @@ const VideoPage = () => {
   const [isLive, setIsLive] = useState(window.location.href.includes("live"))
   const [task_ip, set_task_ip] = useState(null)
   const [isVideoJsAllowed, setIsVideoJsAllowed] = useState(window.location.href.includes("live") ? false : true)
-  const {id} = useParams()
+  const { id } = useParams()
 
-  let endpoint = `ws://127.0.0.1/ws/videos/${user.username}/${id}/`
-  let socket = new ReconnectingWebSocket(endpoint)
+  const socket = useMemo(() => {
+    if (!authTokens?.access) {
+      return null
+    }
+
+    const websocketUrl = `ws://127.0.0.1/ws/videos/${id}/?token=${encodeURIComponent(authTokens.access)}`
+    return new ReconnectingWebSocket(websocketUrl)
+  }, [authTokens, id])
 
   useEffect(() => {
-   socket.onopen = (e) => {
+    if (!socket) {
+      return undefined
+    }
+
+    socket.onopen = (e) => {
       console.log("open", e)
-   }
-  },[])
+    }
+
+    socket.onmessage = (e) => {
+      let message_data = JSON.parse(e.data)
+      setMessages((currentMessages) => [...currentMessages, message_data])
+      setInput('')
+    }
+
+    return () => {
+      socket.close()
+    }
+  }, [socket])
 
   useEffect(() => {
     getVideoUser()
-  },[])
+  }, [])
 
   useEffect(() => {
-    if(isLive) {
+    if (isLive) {
       startStream()
     }
-  },[])
+  }, [])
 
   useEffect(() => {
     createVideoUrls()
-  },[task_ip])
+  }, [task_ip])
 
 
   const createVideoUrls = async () => {
     let info = await getVideo()
-    if(isLive && task_ip !== null) {
+    if (isLive && task_ip !== null) {
       setStreamUrl(`http://${task_ip}:8080/hls/${info.data.stream_key}.m3u8`)
       setContentType('application/x-mpegURL')
     } else {
       setStreamUrl(`http://127.0.0.1/stream/rec/${info.data.stream_key}.mp4`)
       setContentType('video/mp4')
     }
-  } 
+  }
 
   const handleSubmit = (e) => {
     e.preventDefault()
+    if (!socket) {
+      return
+    }
+
     socket.send(JSON.stringify({
-      user: user.username,
       body: input,
-      video: id
     }))
   }
 
-  socket.onmessage = (e) => {
-    let message_data = JSON.parse(e.data)
-    setMessages([...messages, message_data])
-    setInput('')
- }
-
   useEffect(() => {
-    if(following.includes(videoUser?.id)) {
+    if (following.includes(videoUser?.id)) {
       setIsFollowing(true)
     }
-  },[videoUser])
+  }, [videoUser])
 
   const getVideo = async () => {
     let postInfo = await axios.get(`http://127.0.0.1/api/video/${id}`)
@@ -100,20 +116,20 @@ const VideoPage = () => {
       let video = await getVideo()
       let user = await axios.get(`http://127.0.0.1/api/user/${video.data.user}`)
       setVideoUser(user.data)
-    } catch(err) {
+    } catch (err) {
       console.log(err)
     }
   }
 
   useEffect(() => {
     getComments()
-  },[messages.length])
+  }, [messages.length])
 
   const getComments = async () => {
     try {
       let comments = await axios.get(`http://127.0.0.1/api/comments/${id}`)
       setMessages(comments.data)
-    } catch(err) {
+    } catch (err) {
       console.log(err)
     }
   }
@@ -156,39 +172,39 @@ const VideoPage = () => {
       })
       set_task_ip(task_info?.data.ip)
       setTimeout(() => setIsVideoJsAllowed(true), 1000)
-    },1000)
+    }, 1000)
   }
 
   return (
     <div>
       <div className={styles.videoContainer}>
-        { isVideoJsAllowed && streamUrl !== null && contentType !== null ? <VideoJS streamUrl={streamUrl} contentType={contentType} /> : <VideoJSLoading /> }
+        {isVideoJsAllowed && streamUrl !== null && contentType !== null ? <VideoJS streamUrl={streamUrl} contentType={contentType} /> : <VideoJSLoading />}
         {/* {task_ip !== null && isVideoJsAllowed ? <VideoJS task_ip={task_ip} streamKey={post?.stream_key} isLive={isLive} /> : <VideoJSLoading /> } */}
 
         <VideoInfo>
           <div className={styles.userInfo}>
             <div className={styles.videoInfo}>
-            <h5 className={styles.videoTitle}>{post?.name}</h5>
+              <h5 className={styles.videoTitle}>{post?.name}</h5>
               <div className={styles.topics}>
-              {
-                post?.topics.map((topic, index)=> (<div key={index} className={styles.videoTopic}>{topic.name}</div>))
-              }
+                {
+                  post?.topics.map((topic, index) => (<div key={index} className={styles.videoTopic}>{topic.name}</div>))
+                }
               </div>
             </div>
 
             <div className={styles.videoActions}>
-                <div className={styles.likeButtonContainer}>
-                  {isLiked === true ? <LikeButtonFilled className={styles.likeButton} onClick={() => {handleLike('like')}} /> : <LikeButton className={styles.likeButton} onClick={() => {handleLike('like')}} />}
-                  <h5 className={styles.likeStat}>{post?.likes.length}</h5>
-                </div>
+              <div className={styles.likeButtonContainer}>
+                {isLiked === true ? <LikeButtonFilled className={styles.likeButton} onClick={() => { handleLike('like') }} /> : <LikeButton className={styles.likeButton} onClick={() => { handleLike('like') }} />}
+                <h5 className={styles.likeStat}>{post?.likes.length}</h5>
+              </div>
 
-                <div className={styles.dislikeButtonContainer}>
-                  {isLiked === false ? <LikeButtonFilled className={styles.dislikeButton} onClick={() => {handleLike('dislike')}} /> : <LikeButton className={styles.dislikeButton} onClick={() => {handleLike('dislike')}} />}
-                  <h5 className={styles.likeStat}>{post?.dislikes.length}</h5>
-                </div>
+              <div className={styles.dislikeButtonContainer}>
+                {isLiked === false ? <LikeButtonFilled className={styles.dislikeButton} onClick={() => { handleLike('dislike') }} /> : <LikeButton className={styles.dislikeButton} onClick={() => { handleLike('dislike') }} />}
+                <h5 className={styles.likeStat}>{post?.dislikes.length}</h5>
+              </div>
             </div>
           </div>
-          
+
 
           <div className={styles.videoDescription}>
             <div className={styles.profileActions}>
@@ -201,7 +217,7 @@ const VideoPage = () => {
               </div>
 
               <div className={styles.userActions}>
-              {videoUser?.username !== user.username ? <button className={!isFollowing ? styles.followProfile : styles.followProfileFollowed} onClick={(e)=> handleFollow(e)}>{!isFollowing ? 'Follow +' : 'Following'}</button> : null}
+                {videoUser?.username !== user.username ? <button className={!isFollowing ? styles.followProfile : styles.followProfileFollowed} onClick={(e) => handleFollow(e)}>{!isFollowing ? 'Follow +' : 'Following'}</button> : null}
               </div>
             </div>
 
@@ -219,8 +235,8 @@ const VideoPage = () => {
 
             <div className={styles.messagesContainer}>
               {
-                messages.sort((a,b)=> a.created < b.created).map((message, index) => (
-                    <ChatMessage message={message} key={index} />
+                messages.sort((a, b) => a.created < b.created).map((message, index) => (
+                  <ChatMessage message={message} key={index} />
                 ))
               }
             </div>
@@ -235,8 +251,8 @@ const VideoPage = () => {
 
           <div className={styles.messagesContainer}>
             {
-              messages.sort((a,b)=> a.created < b.created).map((message, index) => (
-                  <ChatMessage message={message} key={index} />
+              messages.sort((a, b) => a.created < b.created).map((message, index) => (
+                <ChatMessage message={message} key={index} />
               ))
             }
           </div>
